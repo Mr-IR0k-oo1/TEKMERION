@@ -1,44 +1,45 @@
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use std::time::Duration;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
+/// Direction of a candidate-selection movement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AppEvent {
-    StartPipeline,
+pub enum Direction {
+    Up,
+    Down,
+}
+
+/// High-level actions the interface can perform, produced by the keyboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AppAction {
+    /// ENTER: start the pipeline.
+    Start,
+    /// V: advance/verify the current stage.
     Verify,
+    /// T: flag a tamper.
     Tamper,
+    /// R: reset the interface to idle.
     Reset,
-    SelectUp,
-    SelectDown,
+    /// UP / DOWN: move the candidate selection.
+    Select(Direction),
+    /// Q or Ctrl+C: quit and restore the terminal.
     Quit,
 }
 
-pub fn poll_event() -> Option<Event> {
-    if event::poll(Duration::ZERO).ok()? {
-        event::read().ok()
-    } else {
-        None
-    }
-}
-
-pub fn handle_key_event(key: event::KeyEvent) -> Option<AppEvent> {
-    if key.kind != KeyEventKind::Press {
-        return None;
-    }
+/// Translate a key event into an [`AppAction`].
+///
+/// Ctrl+C is handled first so it always quits regardless of the focused
+/// widget. Case-insensitive letters are accepted for convenience.
+pub fn handle_key(key: KeyEvent) -> Option<AppAction> {
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
-        return Some(AppEvent::Quit);
+        return Some(AppAction::Quit);
     }
     match key.code {
-        KeyCode::Char('q') => Some(AppEvent::Quit),
-        KeyCode::Char('Q') => Some(AppEvent::Quit),
-        KeyCode::Enter => Some(AppEvent::StartPipeline),
-        KeyCode::Char('v') => Some(AppEvent::Verify),
-        KeyCode::Char('V') => Some(AppEvent::Verify),
-        KeyCode::Char('t') => Some(AppEvent::Tamper),
-        KeyCode::Char('T') => Some(AppEvent::Tamper),
-        KeyCode::Char('r') => Some(AppEvent::Reset),
-        KeyCode::Char('R') => Some(AppEvent::Reset),
-        KeyCode::Up => Some(AppEvent::SelectUp),
-        KeyCode::Down => Some(AppEvent::SelectDown),
+        KeyCode::Enter => Some(AppAction::Start),
+        KeyCode::Char('v') | KeyCode::Char('V') => Some(AppAction::Verify),
+        KeyCode::Char('t') | KeyCode::Char('T') => Some(AppAction::Tamper),
+        KeyCode::Char('r') | KeyCode::Char('R') => Some(AppAction::Reset),
+        KeyCode::Char('q') | KeyCode::Char('Q') => Some(AppAction::Quit),
+        KeyCode::Up => Some(AppAction::Select(Direction::Up)),
+        KeyCode::Down => Some(AppAction::Select(Direction::Down)),
         _ => None,
     }
 }
@@ -46,129 +47,78 @@ pub fn handle_key_event(key: event::KeyEvent) -> Option<AppEvent> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::{KeyEventKind, KeyEventState};
 
-    fn make_key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
+    fn key(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
         KeyEvent {
             code,
             modifiers,
             kind: KeyEventKind::Press,
-            state: crossterm::event::KeyEventState::NONE,
+            state: KeyEventState::NONE,
         }
     }
 
     #[test]
-    fn test_quit_key() {
+    fn start_verify_tamper_reset_keys() {
         assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('q'), KeyModifiers::NONE)),
-            Some(AppEvent::Quit)
+            handle_key(key(KeyCode::Enter, KeyModifiers::NONE)),
+            Some(AppAction::Start)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('v'), KeyModifiers::NONE)),
+            Some(AppAction::Verify)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('V'), KeyModifiers::NONE)),
+            Some(AppAction::Verify)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('t'), KeyModifiers::NONE)),
+            Some(AppAction::Tamper)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('r'), KeyModifiers::NONE)),
+            Some(AppAction::Reset)
         );
     }
 
     #[test]
-    fn test_quit_uppercase() {
+    fn quit_keys() {
         assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('Q'), KeyModifiers::NONE)),
-            Some(AppEvent::Quit)
+            handle_key(key(KeyCode::Char('q'), KeyModifiers::NONE)),
+            Some(AppAction::Quit)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('Q'), KeyModifiers::NONE)),
+            Some(AppAction::Quit)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('c'), KeyModifiers::CONTROL)),
+            Some(AppAction::Quit)
         );
     }
 
     #[test]
-    fn test_ctrl_c() {
+    fn selection_keys() {
         assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-            Some(AppEvent::Quit)
+            handle_key(key(KeyCode::Up, KeyModifiers::NONE)),
+            Some(AppAction::Select(Direction::Up))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Down, KeyModifiers::NONE)),
+            Some(AppAction::Select(Direction::Down))
         );
     }
 
     #[test]
-    fn test_enter() {
+    fn unrecognized_keys() {
         assert_eq!(
-            handle_key_event(make_key(KeyCode::Enter, KeyModifiers::NONE)),
-            Some(AppEvent::StartPipeline)
-        );
-    }
-
-    #[test]
-    fn test_verify() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('v'), KeyModifiers::NONE)),
-            Some(AppEvent::Verify)
-        );
-    }
-
-    #[test]
-    fn test_verify_uppercase() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('V'), KeyModifiers::NONE)),
-            Some(AppEvent::Verify)
-        );
-    }
-
-    #[test]
-    fn test_tamper() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('t'), KeyModifiers::NONE)),
-            Some(AppEvent::Tamper)
-        );
-    }
-
-    #[test]
-    fn test_tamper_uppercase() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('T'), KeyModifiers::NONE)),
-            Some(AppEvent::Tamper)
-        );
-    }
-
-    #[test]
-    fn test_reset() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('r'), KeyModifiers::NONE)),
-            Some(AppEvent::Reset)
-        );
-    }
-
-    #[test]
-    fn test_reset_uppercase() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('R'), KeyModifiers::NONE)),
-            Some(AppEvent::Reset)
-        );
-    }
-
-    #[test]
-    fn test_select_up() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Up, KeyModifiers::NONE)),
-            Some(AppEvent::SelectUp)
-        );
-    }
-
-    #[test]
-    fn test_select_down() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Down, KeyModifiers::NONE)),
-            Some(AppEvent::SelectDown)
-        );
-    }
-
-    #[test]
-    fn test_unrecognized_key() {
-        assert_eq!(
-            handle_key_event(make_key(KeyCode::Char('x'), KeyModifiers::NONE)),
+            handle_key(key(KeyCode::Char('x'), KeyModifiers::NONE)),
             None
         );
-    }
-
-    #[test]
-    fn test_release_event_ignored() {
-        let key = KeyEvent {
-            code: KeyCode::Char('q'),
-            modifiers: KeyModifiers::NONE,
-            kind: crossterm::event::KeyEventKind::Release,
-            state: crossterm::event::KeyEventState::NONE,
-        };
-        assert_eq!(handle_key_event(key), None);
+        assert_eq!(
+            handle_key(key(KeyCode::Char('c'), KeyModifiers::NONE)),
+            None
+        );
     }
 }

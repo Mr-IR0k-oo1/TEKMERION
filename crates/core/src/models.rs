@@ -1,15 +1,17 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use url::Url;
 
-#[derive(Debug, Serialize, Deserialize)]
+use crate::state::PipelineState;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceDetection {
-    pub bounding_box: [f32; 4], // [x, y, w, h]
+    pub bounding_box: [f32; 4],
     pub confidence: f32,
     pub quality: f32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceEmbedding {
     pub vector: Vec<f32>,
     pub normalized: bool,
@@ -46,7 +48,7 @@ pub enum VerificationStatus {
     Reject,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvidenceRecord {
     pub source_url: Url,
     pub provider: String,
@@ -70,10 +72,39 @@ pub struct BlockchainRecord {
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PipelineResult {
-    pub final_state: super::state::PipelineState,
+    pub final_state: PipelineState,
     pub evidence: Option<EvidenceBundle>,
     pub blockchain: Option<BlockchainRecord>,
     pub error: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn search_candidate_round_trip() {
+        let candidate = SearchCandidate {
+            url: Url::parse("https://example.com").unwrap(),
+            title: Some("Test".to_string()),
+            provider: "Google".to_string(),
+            image_url: None,
+            snippet: None,
+            discovered_at: Utc::now(),
+        };
+
+        let json = serde_json::to_string(&candidate).unwrap();
+        let deserialized: SearchCandidate = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(candidate.url, deserialized.url);
+        assert_eq!(candidate.provider, deserialized.provider);
+    }
+
+    #[test]
+    fn verification_status_variants() {
+        assert_ne!(VerificationStatus::Match, VerificationStatus::Reject);
+        assert_eq!(VerificationStatus::Review, VerificationStatus::Review);
+    }
 }

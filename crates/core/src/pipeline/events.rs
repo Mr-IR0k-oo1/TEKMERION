@@ -1,50 +1,58 @@
-//! Events emitted by the pipeline runner.
+//! Execution events emitted by the pipeline runner.
 //!
-//! Every stage reports its lifecycle through a [`PipelineEvent`]. Stage
-//! transitions are never silent: the runner always emits a `Transition`,
-//! `StageStarted` and (on success) `StageCompleted`, or a `StageFailed` and
-//! `PipelineFailed` on error.
+//! These record the *runtime* lifecycle of a pipeline run (start, per-stage
+//! progress, completion, cancellation, failure) and live alongside the
+//! state-machine events in [`crate::events`].
+
+use chrono::{DateTime, Utc};
 
 use super::pipeline::{PipelineError, PipelineStage};
 
-/// Events emitted while running or controlling the pipeline.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A structured event emitted while a pipeline run executes.
+///
+/// Every stage emits both a [`PipelineEvent::StageStarted`] and a
+/// [`PipelineEvent::StageCompleted`] / [`PipelineEvent::StageFailed`], so a
+/// consumer can follow progress stage-by-stage without making assumptions.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum PipelineEvent {
-    /// The pipeline began running.
-    PipelineStarted,
-    /// The pipeline was reset to its idle state.
-    PipelineReset,
-    /// A new stage transitioned into.
-    Transition {
-        /// The stage just left.
-        from: PipelineStage,
-        /// The stage being entered.
-        to: PipelineStage,
-    },
+    /// A run started.
+    PipelineStarted { at: DateTime<Utc> },
     /// A stage began executing.
     StageStarted {
         stage: PipelineStage,
         sequence: usize,
     },
-    /// A stage finished successfully.
+    /// A stage completed successfully.
     StageCompleted {
         stage: PipelineStage,
         sequence: usize,
     },
-    /// A stage failed.
+    /// A stage failed with a stage-specific error.
     StageFailed {
         stage: PipelineStage,
         sequence: usize,
         error: PipelineError,
     },
-    /// The whole pipeline finished successfully.
+    /// The run completed successfully.
     PipelineCompleted,
-    /// The pipeline was cancelled.
+    /// The run was cancelled.
     PipelineCancelled,
-    /// The pipeline failed (final stage failure surfaced at the top level).
-    PipelineFailed {
-        error: PipelineError,
-    },
+    /// The run failed.
+    PipelineFailed { error: PipelineError },
+    /// The runner was reset.
+    PipelineReset,
+}
+
+impl PipelineEvent {
+    /// Which stage a progress event refers to, if any.
+    pub fn stage(&self) -> Option<PipelineStage> {
+        match self {
+            PipelineEvent::StageStarted { stage, .. }
+            | PipelineEvent::StageCompleted { stage, .. }
+            | PipelineEvent::StageFailed { stage, .. } => Some(*stage),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -52,41 +60,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stage_failure_event_round_trips() {
+    fn stage_failure_event_round_trip() {
         let event = PipelineEvent::StageFailed {
             stage: PipelineStage::Discovery,
             sequence: 3,
             error: PipelineError::NotConfigured(PipelineStage::Discovery),
         };
-        match &event {
-            PipelineEvent::StageFailed {
-                stage,
-                sequence,
-                error,
-            } => {
-                assert_eq!(*stage, PipelineStage::Discovery);
-                assert_eq!(*sequence, 3);
-                assert_eq!(
-                    *error,
-                    PipelineError::NotConfigured(PipelineStage::Discovery)
-                );
-            }
-            other => panic!("unexpected event: {other:?}"),
-        }
+        let json = serde_json::to_string(&event).unwrap();
+        let back: PipelineEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, event);
     }
 
     #[test]
-    fn transition_event_holds_stages() {
-        let event = PipelineEvent::Transition {
-            from: PipelineStage::FaceAnalysis,
-            to: PipelineStage::Discovery,
-        };
-        match event {
-            PipelineEvent::Transition { from, to } => {
-                assert_eq!(from, PipelineStage::FaceAnalysis);
-                assert_eq!(to, PipelineStage::Discovery);
+    fn stage_event_exposes_its_stage() {
+        assert_eq!(
+            PipelineEvent::StageStarted {
+                stage: PipelineStage::Evidence,
+                sequence: 6
             }
-            other => panic!("unexpected event: {other:?}"),
-        }
+            .stage(),
+            Some(PipelineStage::Evidence)
+        );
+        assert_eq!(
+            PipelineEvent::PipelineStarted { at: Utc::now() }.stage(),
+            None
+        );
     }
 }

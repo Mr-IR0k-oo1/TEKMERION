@@ -2,19 +2,22 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CoreError {
-    #[error("Pipeline state transition error: {0}")]
-    StateError(String),
+    #[error("pipeline state transition error: {0}")]
+    State(String),
 
-    #[error("Serialization error: {0}")]
-    SerializationError(#[from] serde_json::Error),
+    #[error("serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
 
     #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
 
-    #[error("Validation error: {0}")]
-    ValidationError(String),
+    #[error("validation error: {0}")]
+    Validation(String),
 
-    #[error("Internal error: {0}")]
+    #[error("configuration error: {0}")]
+    Config(String),
+
+    #[error("internal error: {0}")]
     Internal(String),
 }
 

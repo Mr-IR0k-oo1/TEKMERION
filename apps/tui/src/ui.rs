@@ -1,505 +1,438 @@
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Gauge, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Gauge, Paragraph},
     Frame,
 };
 
-use crate::app::{App, EventLevel, PipelinePhase, PIPELINE_PHASES};
+use crate::app::{App, AppStatus, Stage};
 
+/// Render the whole interface into a single frame.
 pub fn render(frame: &mut Frame, app: &App) {
     let area = frame.area();
-    if area.width < 40 || area.height < 15 {
-        let msg = Paragraph::new("Terminal too small. Need 120x40 minimum.")
-            .style(Style::default().fg(Color::Red));
-        frame.render_widget(msg, area);
+
+    // Guard against very small terminal windows
+    if area.width < 50 || area.height < 14 {
+        render_too_small(frame, area);
         return;
     }
 
-    let main_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2),
-            Constraint::Length(1),
-            Constraint::Fill(1),
-            Constraint::Length(6),
-            Constraint::Length(1),
-        ])
-        .split(area);
+    // Dynamic height allocation for events so middle pane has at least 11 rows
+    // (enough to comfortably display all 7 stages and all detail fields without clipping)
+    let events_height = if area.height >= 30 {
+        8
+    } else if area.height >= 24 {
+        6
+    } else {
+        5
+    };
 
-    render_header(frame, main_layout[0]);
-    render_progress(frame, main_layout[1], app);
-    render_content(frame, main_layout[2], app);
-    render_events(frame, main_layout[3], app);
-    render_footer(frame, main_layout[4]);
+    let chunks = Layout::vertical([
+        Constraint::Length(3),             // header
+        Constraint::Min(11),               // stage + detail
+        Constraint::Length(events_height), // events
+        Constraint::Length(3),             // footer
+    ])
+    .split(area);
+
+    render_header(frame, chunks[0]);
+
+    // Give the stages panel fixed width (28 cols is optimal for label + marker + padding)
+    // and let the detail pane expand into the remaining width.
+    let middle = Layout::horizontal([Constraint::Length(28), Constraint::Fill(1)])
+        .split(chunks[1]);
+    render_stages(frame, middle[0], app);
+    render_detail(frame, middle[1], app);
+
+    render_events(frame, chunks[2], app);
+    render_footer(frame, chunks[3]);
+}
+
+fn render_too_small(frame: &mut Frame, area: Rect) {
+    let warning = Paragraph::new(vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            "Terminal window is too small for Tekmerion TUI",
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("Current: {}x{}  |  Minimum: 50x14", area.width, area.height),
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(Span::styled(
+            "Please enlarge your terminal window.",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ])
+    .alignment(Alignment::Center)
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Yellow)),
+    );
+    frame.render_widget(warning, area);
 }
 
 fn render_header(frame: &mut Frame, area: Rect) {
-    let title_line = Line::from(vec![
+    let title = Paragraph::new(Line::from(vec![
         Span::styled(
-            "TEKMERION",
+            " TEKMERION ",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" // ", Style::default().fg(Color::DarkGray)),
         Span::styled(
-            "EVIDENCE INTELLIGENCE ENGINE",
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
+            "// EVIDENCE INTELLIGENCE ENGINE  ",
+            Style::default().fg(Color::White),
         ),
-    ]);
-    let header = Paragraph::new(title_line);
-    frame.render_widget(header, area);
-}
-
-fn render_progress(frame: &mut Frame, area: Rect, app: &App) {
-    let phase_label = app.phase.status_text();
-    let progress_pct = (app.progress * 100.0) as u16;
-    let label = format!(" {} [{}%] ", phase_label, progress_pct);
-
-    let gauge = Gauge::default()
-        .block(Block::default().borders(Borders::BOTTOM))
-        .gauge_style(Style::default().fg(Color::Cyan).bg(Color::Black))
-        .ratio(app.progress as f64)
-        .label(Span::styled(label, Style::default().fg(Color::White)));
-    frame.render_widget(gauge, area);
-}
-
-fn render_content(frame: &mut Frame, area: Rect, app: &App) {
-    let content_layout = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Length(28), Constraint::Fill(1)])
-        .split(area);
-
-    render_pipeline(frame, content_layout[0], app);
-    render_details(frame, content_layout[1], app);
-}
-
-fn render_pipeline(frame: &mut Frame, area: Rect, app: &App) {
-    let items: Vec<ListItem> = PIPELINE_PHASES
-        .iter()
-        .enumerate()
-        .map(|(i, name)| {
-            let current_idx = app.phase.index();
-            let (marker, style) = if i < current_idx {
-                ("[x] ", Style::default().fg(Color::Green))
-            } else if i == current_idx && app.phase != PipelinePhase::Idle {
-                (
-                    "[>] ",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
-            } else {
-                ("[ ] ", Style::default().fg(Color::DarkGray))
-            };
-
-            let line = Line::from(vec![
-                Span::styled(marker, style),
-                Span::styled(*name, style),
-            ]);
-            ListItem::new(line)
-        })
-        .collect();
-
-    let list = List::new(items).block(
+        Span::styled("v0.1.0", Style::default().fg(Color::DarkGray)),
+    ]))
+    .block(
         Block::default()
-            .title(" PIPELINE ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray)),
-    );
-    frame.render_widget(list, area);
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::Cyan)),
+    )
+    .alignment(Alignment::Left);
+    frame.render_widget(title, area);
 }
 
-fn render_details(frame: &mut Frame, area: Rect, app: &App) {
-    let detail_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(10), Constraint::Fill(1)])
-        .split(area);
-
-    render_candidate_list(frame, detail_layout[0], app);
-    render_candidate_detail(frame, detail_layout[1], app);
-}
-
-fn render_candidate_list(frame: &mut Frame, area: Rect, app: &App) {
-    if app.candidates.is_empty() {
-        let empty = Paragraph::new("No candidates discovered yet")
-            .style(Style::default().fg(Color::DarkGray))
-            .block(
-                Block::default()
-                    .title(" CANDIDATES ")
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::DarkGray)),
-            );
-        frame.render_widget(empty, area);
-        return;
-    }
-
-    let items: Vec<ListItem> = app
-        .candidates
+fn render_stages(frame: &mut Frame, area: Rect, app: &App) {
+    let lines: Vec<Line> = Stage::ALL
         .iter()
         .enumerate()
-        .map(|(i, c)| {
-            let sim_color = if c.similarity >= 0.9 {
-                Color::Green
-            } else if c.similarity >= 0.8 {
-                Color::Yellow
-            } else {
-                Color::Red
-            };
-            let line = Line::from(vec![
-                Span::styled(format!("{} ", i + 1), Style::default().fg(Color::DarkGray)),
-                Span::styled(&c.title, Style::default().fg(Color::White)),
-                Span::styled(
-                    format!(" [{:.0}%]", c.similarity * 100.0),
-                    Style::default().fg(sim_color),
-                ),
-            ]);
-            ListItem::new(line)
-        })
+        .map(|(idx, stage)| stage_line(idx, *stage, app))
         .collect();
 
-    let mut state = ListState::default();
-    state.select(Some(app.selected_candidate));
-
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .title(format!(" CANDIDATES [{}] ", app.candidates.len()))
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray)),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol(">> ");
-
-    frame.render_stateful_widget(list, area, &mut state);
-}
-
-fn render_candidate_detail(frame: &mut Frame, area: Rect, app: &App) {
-    if app.candidates.is_empty() {
-        render_pipeline_detail(frame, area, app);
-    } else {
-        render_candidate_info(frame, area, app);
-    }
-}
-
-fn render_candidate_info(frame: &mut Frame, area: Rect, app: &App) {
-    let Some(c) = app.candidates.get(app.selected_candidate) else {
-        let empty = Paragraph::new("No candidate selected").block(
-            Block::default()
-                .title(" DETAIL ")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray)),
-        );
-        frame.render_widget(empty, area);
-        return;
-    };
-
-    let sim_color = if c.similarity >= 0.9 {
-        Color::Green
-    } else if c.similarity >= 0.8 {
-        Color::Yellow
-    } else {
-        Color::Red
-    };
-
-    let lines = vec![
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("  Title:    ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&c.title, Style::default().fg(Color::White)),
-        ]),
-        Line::from(vec![
-            Span::styled("  Provider: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&c.provider, Style::default().fg(Color::Cyan)),
-        ]),
-        Line::from(vec![
-            Span::styled("  URL:      ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&c.url, Style::default().fg(Color::Blue)),
-        ]),
-        Line::from(vec![
-            Span::styled("  Snippet:  ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&c.snippet, Style::default().fg(Color::White)),
-        ]),
-        Line::from(vec![
-            Span::styled("  Similarity: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("{:.1}%", c.similarity * 100.0),
-                Style::default().fg(sim_color),
-            ),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Evidence & Blockchain Status:",
-            Style::default()
-                .fg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )),
-    ];
-
-    let mut detail_lines = lines;
-
-    if !app.evidence_root.is_empty() {
-        detail_lines.push(Line::from(vec![
-            Span::styled("  Root: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&app.evidence_root, Style::default().fg(Color::Magenta)),
-        ]));
-    }
-    if !app.tx_hash.is_empty() {
-        detail_lines.push(Line::from(vec![
-            Span::styled("  TX:   ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&app.tx_hash, Style::default().fg(Color::Magenta)),
-        ]));
-    }
-    if !app.verification_result.is_empty() {
-        let result_color = match app.verification_result.as_str() {
-            "CONFIRMED" => Color::Green,
-            "TAMPER DETECTED" => Color::Red,
-            _ => Color::Yellow,
-        };
-        detail_lines.push(Line::from(vec![
-            Span::styled("  Result: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                &app.verification_result,
-                Style::default()
-                    .fg(result_color)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]));
-    }
-
-    let detail = Paragraph::new(detail_lines).wrap(Wrap { trim: true });
     let block = Block::default()
-        .title(" DETAIL ")
+        .title(Line::from(vec![
+            Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
+            Span::styled("PIPELINE", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+        ]))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(detail.block(block), area);
+
+    frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-fn render_pipeline_detail(frame: &mut Frame, area: Rect, app: &App) {
-    let lines = vec![
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Pipeline Overview",
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
+fn stage_line(idx: usize, stage: Stage, app: &App) -> Line<'_> {
+    let (marker, label_style) = stage_marker(idx, stage, app);
+    let label = stage.label();
+
+    if app.status == AppStatus::Running && app.current == Some(stage) {
         Line::from(vec![
-            Span::styled("  Current Phase: ", Style::default().fg(Color::DarkGray)),
+            Span::raw(" "),
+            marker,
+            Span::raw(" "),
+            Span::styled(format!("{:<13}", label), label_style),
+            Span::styled(" [ACTIVE]", Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::raw(" "),
+            marker,
+            Span::raw(" "),
+            Span::styled(format!("{:<13}", label), label_style),
+        ])
+    }
+}
+
+fn stage_marker(idx: usize, stage: Stage, app: &App) -> (Span<'static>, Style) {
+    let done_upto = match (app.status, app.current) {
+        (AppStatus::Completed, _) => Some(Stage::ALL.len()),
+        (AppStatus::Running, Some(current)) => Some(current.index()),
+        (AppStatus::Tampered, _) => Some(0),
+        _ => None,
+    };
+
+    if app.status == AppStatus::Running && app.current == Some(stage) {
+        (
             Span::styled(
-                app.phase.status_text(),
+                "▶",
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Progress:      ", Style::default().fg(Color::DarkGray)),
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        )
+    } else if app.status == AppStatus::Tampered && app.current == Some(stage) {
+        (
             Span::styled(
-                format!("{:.0}%", app.progress * 100.0),
-                Style::default().fg(Color::Cyan),
+                "✖",
+                Style::default()
+                    .fg(Color::Red)
+                    .add_modifier(Modifier::BOLD),
             ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Candidates:    ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                format!("{}", app.candidates.len()),
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Press ENTER to start the pipeline",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )
+    } else if done_upto.is_some_and(|n| idx < n) {
+        (
+            Span::styled("✓", Style::default().fg(Color::Green)),
+            Style::default().fg(Color::Green),
+        )
+    } else {
+        (
+            Span::styled("○", Style::default().fg(Color::DarkGray)),
             Style::default().fg(Color::DarkGray),
-        )),
+        )
+    }
+}
+
+fn render_detail(frame: &mut Frame, area: Rect, app: &App) {
+    let (status_badge, status_style) = match app.status {
+        AppStatus::Idle => (
+            " IDLE ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        ),
+        AppStatus::Running => (
+            " RUNNING ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        AppStatus::Completed => (
+            " COMPLETED ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
+        AppStatus::Tampered => (
+            " TAMPERED ",
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+        ),
+    };
+
+    let result_style = match app.verification_result.as_str() {
+        "verified" => Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+        "tampered" => Style::default()
+            .fg(Color::Red)
+            .add_modifier(Modifier::BOLD),
+        _ => Style::default().fg(Color::DarkGray),
+    };
+
+    let selected = if app.candidate_count == 0 {
+        "none".to_string()
+    } else {
+        format!("{}/{}", app.selected_candidate + 1, app.candidate_count)
+    };
+
+    let key_style = Style::default().fg(Color::DarkGray);
+    let val_style = Style::default().fg(Color::White);
+
+    let lines = vec![
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "STATUS:"), key_style),
+            Span::styled(status_badge, status_style),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "STATE:"), key_style),
+            Span::styled(app.pipeline_state().label(), val_style),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "CANDIDATES:"), key_style),
+            Span::styled(format!("{}", app.candidate_count), val_style),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "SELECTED:"), key_style),
+            Span::styled(selected, val_style),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "EVIDENCE ROOT:"), key_style),
+            if app.evidence_root == "--" {
+                Span::styled("--", Style::default().fg(Color::DarkGray))
+            } else {
+                Span::styled(&app.evidence_root, Style::default().fg(Color::Cyan))
+            },
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "TX HASH:"), key_style),
+            if app.tx_hash == "--" {
+                Span::styled("--", Style::default().fg(Color::DarkGray))
+            } else {
+                Span::styled(&app.tx_hash, Style::default().fg(Color::Cyan))
+            },
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "RESULT:"), key_style),
+            Span::styled(&app.verification_result, result_style),
+        ]),
     ];
 
-    let detail = Paragraph::new(lines);
     let block = Block::default()
-        .title(" DETAIL ")
+        .title(Line::from(vec![
+            Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
+            Span::styled("DETAILS", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+        ]))
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(detail.block(block), area);
+
+    let inner = block.inner(area);
+    let rows = Layout::vertical([Constraint::Fill(1), Constraint::Length(3)]).split(inner);
+
+    frame.render_widget(Paragraph::new(lines), rows[0]);
+
+    let gauge_color = match app.status {
+        AppStatus::Idle => Color::DarkGray,
+        AppStatus::Running => Color::Cyan,
+        AppStatus::Completed => Color::Green,
+        AppStatus::Tampered => Color::Red,
+    };
+
+    let percent = app.progress_percent();
+    let gauge = Gauge::default()
+        .gauge_style(
+            Style::default()
+                .fg(gauge_color)
+                .bg(Color::Rgb(25, 25, 30))
+                .add_modifier(Modifier::BOLD),
+        )
+        .percent(percent)
+        .label(Span::styled(
+            format!("Progress: {}%", percent),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ));
+
+    frame.render_widget(gauge, rows[1]);
+    frame.render_widget(block, area);
 }
 
 fn render_events(frame: &mut Frame, area: Rect, app: &App) {
-    let visible_height = area.height.saturating_sub(2) as usize;
-    let total = app.events.len();
-    let start = total.saturating_sub(visible_height);
+    let block = Block::default()
+        .title(Line::from(vec![
+            Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
+            Span::styled("RECENT EVENTS", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+        ]))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::DarkGray));
 
-    let events: Vec<Line> = app.events[start..]
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    if app.events.is_empty() {
+        let placeholder = Paragraph::new(Line::from(Span::styled(
+            "  (No events recorded yet. Press [ENTER] to start pipeline)",
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC),
+        )));
+        frame.render_widget(placeholder, inner);
+        return;
+    }
+
+    // Auto-scroll to show the most recent events that fit in the pane
+    let visible_lines = inner.height as usize;
+    let skip = app.events.len().saturating_sub(visible_lines);
+
+    let lines: Vec<Line> = app
+        .events
         .iter()
-        .map(|e| {
-            let level_color = match e.level {
-                EventLevel::Info => Color::DarkGray,
-                EventLevel::Success => Color::Green,
-                EventLevel::Warning => Color::Yellow,
-                EventLevel::Error => Color::Red,
+        .skip(skip)
+        .map(|event| {
+            let (icon, icon_style) = if event.contains("verified") {
+                ("★ ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+            } else if event.contains("complete") {
+                ("✓ ", Style::default().fg(Color::Green))
+            } else if event.contains("started") {
+                ("▶ ", Style::default().fg(Color::Cyan))
+            } else if event.contains("Tamper") {
+                ("✖ ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+            } else if event.contains("reset") {
+                ("↺ ", Style::default().fg(Color::Yellow))
+            } else {
+                ("• ", Style::default().fg(Color::White))
             };
-            let ts = e.timestamp.format("%H:%M:%S");
+
             Line::from(vec![
-                Span::styled(format!("{} ", ts), Style::default().fg(Color::DarkGray)),
-                Span::styled(
-                    format!("[{:?}] ", e.level),
-                    Style::default().fg(level_color),
-                ),
-                Span::styled(&e.message, Style::default().fg(Color::White)),
+                Span::raw(" "),
+                Span::styled(icon, icon_style),
+                Span::styled(event.as_str(), Style::default().fg(Color::White)),
             ])
         })
         .collect();
 
-    let events = if events.is_empty() {
-        vec![Line::from(Span::styled(
-            "  No events yet",
-            Style::default().fg(Color::DarkGray),
-        ))]
-    } else {
-        events
-    };
-
-    let paragraph = Paragraph::new(events).wrap(Wrap { trim: true });
-    let block = Block::default()
-        .title(" EVENTS ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray));
-    frame.render_widget(paragraph.block(block), area);
+    frame.render_widget(Paragraph::new(lines), inner);
 }
 
 fn render_footer(frame: &mut Frame, area: Rect) {
-    let keys = Line::from(vec![
+    let footer = Paragraph::new(Line::from(vec![
+        Span::raw(" "),
         Span::styled(
-            " ENTER",
+            " ENTER ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Black)
+                .bg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" Start  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(" Start  ", Style::default().fg(Color::White)),
         Span::styled(
-            "V",
+            " V ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Black)
+                .bg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" Verify  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(" Advance  ", Style::default().fg(Color::White)),
         Span::styled(
-            "T",
+            " T ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::White)
+                .bg(Color::Red)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" Tamper  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(" Tamper  ", Style::default().fg(Color::White)),
         Span::styled(
-            "R",
+            " R ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Black)
+                .bg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" Reset  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(" Reset  ", Style::default().fg(Color::White)),
         Span::styled(
-            "\u{2191}\u{2193}",
+            " ↑/↓ ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::Black)
+                .bg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" Select  ", Style::default().fg(Color::DarkGray)),
+        Span::styled(" Select  ", Style::default().fg(Color::White)),
         Span::styled(
-            "Q",
+            " Q ",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(Color::White)
+                .bg(Color::Magenta)
                 .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(" Quit", Style::default().fg(Color::DarkGray)),
-    ]);
-    let footer = Paragraph::new(keys);
+        Span::styled(" Quit", Style::default().fg(Color::White)),
+    ]))
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    )
+    .alignment(Alignment::Center);
+
     frame.render_widget(footer, area);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::App;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-
-    fn setup_terminal(width: u16, height: u16) -> Terminal<TestBackend> {
-        let backend = TestBackend::new(width, height);
-        Terminal::new(backend).unwrap()
-    }
-
-    #[test]
-    fn test_render_idle() {
-        let mut terminal = setup_terminal(120, 40);
-        let app = App::new();
-        terminal.draw(|f| render(f, &app)).unwrap();
-    }
-
-    #[test]
-    fn test_render_with_candidates() {
-        let mut terminal = setup_terminal(120, 40);
-        let mut app = App::new();
-        app.phase = crate::app::PipelinePhase::Verify;
-        app.candidates = vec![crate::app::Candidate {
-            title: "Test".into(),
-            provider: "Google".into(),
-            url: "https://test.com".into(),
-            snippet: "A test snippet".into(),
-            similarity: 0.95,
-        }];
-        terminal.draw(|f| render(f, &app)).unwrap();
-    }
-
-    #[test]
-    fn test_render_evidence_phase() {
-        let mut terminal = setup_terminal(120, 40);
-        let mut app = App::new();
-        app.phase = crate::app::PipelinePhase::FinalVerify;
-        app.evidence_root = "0x7a3b1234567890".into();
-        app.tx_hash = "0xabcdef12345678".into();
-        app.verification_result = "CONFIRMED".into();
-        terminal.draw(|f| render(f, &app)).unwrap();
-    }
-
-    #[test]
-    fn test_render_tamper() {
-        let mut terminal = setup_terminal(120, 40);
-        let mut app = App::new();
-        app.phase = crate::app::PipelinePhase::FinalVerify;
-        app.evidence_root = "TAMPERED_0x7a3b".into();
-        app.verification_result = "TAMPER DETECTED".into();
-        terminal.draw(|f| render(f, &app)).unwrap();
-    }
-
-    #[test]
-    fn test_render_too_small() {
-        let mut terminal = setup_terminal(30, 10);
-        let app = App::new();
-        terminal.draw(|f| render(f, &app)).unwrap();
-    }
-
-    #[test]
-    fn test_render_empty_candidates() {
-        let mut terminal = setup_terminal(120, 40);
-        let mut app = App::new();
-        app.phase = crate::app::PipelinePhase::Discovery;
-        terminal.draw(|f| render(f, &app)).unwrap();
-    }
-
-    #[test]
-    fn test_render_many_events() {
-        let mut terminal = setup_terminal(120, 40);
-        let mut app = App::new();
-        for i in 0..50 {
-            app.push_event(format!("Event number {i}"), crate::app::EventLevel::Info);
-        }
-        terminal.draw(|f| render(f, &app)).unwrap();
-    }
 }

@@ -1,7 +1,8 @@
 [package]
 name = "tekmerion-core"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 serde = { workspace = true }
@@ -12,4 +13,5 @@ chrono = { workspace = true }
 url = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 async-trait = { workspace = true }

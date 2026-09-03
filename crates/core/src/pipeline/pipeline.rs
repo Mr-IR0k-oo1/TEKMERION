@@ -1,33 +1,43 @@
-//! Pipeline stage definitions, structured errors, and dependency-injection
-//! boundaries.
+//! Pipeline stage model, structured errors, engine traits and the dependency
+//! injection container.
 //!
-//! The pipeline is modelled as an ordered sequence of [`PipelineStage`]s. Each
-//! stage that requires external work is backed by a trait (engine) that must be
-//! supplied by the caller. No default or fake implementation is provided here:
-//! when an engine is absent the runner reports an explicit
-//! [`PipelineError::NotConfigured`] error for the offending stage.
+//! This module defines *abstractions only*: the stages the pipeline walks
+//! through, the errors it can produce, and the trait boundaries that concrete
+//! implementations (face, discovery, verification, evidence, blockchain) will
+//! satisfy in later phases. No implementation is provided here.
+
+use std::fmt;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
-use crate::models::{BlockchainRecord, EvidenceBundle, FaceAnalysis, SearchCandidate, VerificationResult};
+use crate::models::{
+    BlockchainRecord, EvidenceBundle, FaceAnalysis, SearchCandidate, VerificationResult,
+};
 
-/// The ordered stages of the TEKMERION evidence pipeline.
+/// A stage in the pipeline, executed in this exact order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PipelineStage {
+    /// Source acquisition.
     Input,
+    /// Face detection and embedding.
     FaceAnalysis,
+    /// Web / reverse-image search for candidate matches.
     Discovery,
+    /// Verify discovered candidates against the face embedding.
     CandidateVerification,
+    /// Select the best matching candidate.
     MatchSelection,
+    /// Build the evidence bundle.
     Evidence,
+    /// Register the evidence root on-chain.
     Blockchain,
+    /// Verify the on-chain anchor.
     OnchainVerification,
 }
 
 impl PipelineStage {
-    /// All stages in execution order.
     pub const ALL: [PipelineStage; 8] = [
         PipelineStage::Input,
         PipelineStage::FaceAnalysis,
@@ -39,26 +49,17 @@ impl PipelineStage {
         PipelineStage::OnchainVerification,
     ];
 
-    /// Returns the next stage in the pipeline, or [`None`] for the final stage.
-    pub fn next(self) -> Option<PipelineStage> {
-        match self {
-            PipelineStage::Input => Some(PipelineStage::FaceAnalysis),
-            PipelineStage::FaceAnalysis => Some(PipelineStage::Discovery),
-            PipelineStage::Discovery => Some(PipelineStage::CandidateVerification),
-            PipelineStage::CandidateVerification => Some(PipelineStage::MatchSelection),
-            PipelineStage::MatchSelection => Some(PipelineStage::Evidence),
-            PipelineStage::Evidence => Some(PipelineStage::Blockchain),
-            PipelineStage::Blockchain => Some(PipelineStage::OnchainVerification),
-            PipelineStage::OnchainVerification => None,
-        }
-    }
-
-    /// Zero-based index of the stage within [`PipelineStage::ALL`].
     pub fn index(self) -> usize {
-        PipelineStage::ALL.iter().position(|s| *s == self).unwrap_or(0)
+        Self::ALL
+            .iter()
+            .position(|s| *s == self)
+            .expect("every stage is present in ALL")
     }
 
-    /// Human-readable label for the stage.
+    pub fn next(self) -> Option<PipelineStage> {
+        Self::ALL.get(self.index() + 1).copied()
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             PipelineStage::Input => "INPUT",
@@ -73,86 +74,75 @@ impl PipelineStage {
     }
 }
 
-/// Structured error type produced by the pipeline and its engines.
-///
-/// The [`Stage`] and [`NotConfigured`] variants carry the stage responsible so
-/// failures can be reported per-stage without losing context.
-///
-/// [`Stage`]: PipelineError::Stage
-/// [`NotConfigured`]: PipelineError::NotConfigured
-#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
+/// Structured, stage-aware error produced by the pipeline or its engines.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
 pub enum PipelineError {
-    /// A stage depends on an engine that has not been supplied.
+    /// The engine required by a stage is not wired in.
     #[error("engine not configured for stage {0:?}")]
     NotConfigured(PipelineStage),
 
-    /// A specific stage failed. The message does not leak internal error
-    /// types but preserves the failing stage.
+    /// A stage's engine failed with a message.
     #[error("stage {stage:?} failed: {message}")]
-    Stage { stage: PipelineStage, message: String },
+    Stage {
+        stage: PipelineStage,
+        message: String,
+    },
 
-    /// The pipeline was cancelled by the caller.
+    /// The pipeline was cancelled while a stage was in flight.
     #[error("pipeline cancelled")]
     Cancelled,
 
-    /// A control operation was not valid for the current runner state.
+    /// An illegal state transition was attempted.
     #[error("invalid pipeline transition: {0}")]
     InvalidTransition(String),
 
-    /// No candidate passed the verification threshold.
+    /// No candidate matched the similarity threshold.
     #[error("no matching candidate found")]
     NoMatch,
 
-    /// The input supplied to the pipeline was invalid.
+    /// The input payload was invalid.
     #[error("invalid pipeline input: {0}")]
     Input(String),
 
-    /// An unexpected internal error.
+    /// An internal, non-stage-specific failure.
     #[error("internal pipeline error: {0}")]
     Internal(String),
 }
 
 impl PipelineError {
-    /// True if the error is a stage-specific failure (as opposed to a control
-    /// error such as cancellation or an invalid transition).
+    /// Whether the error is a stage-local failure vs. a control-flow error
+    /// (cancellation / invalid transition).
     pub fn is_stage_failure(&self) -> bool {
         matches!(
             self,
-            PipelineError::Stage { .. }
-                | PipelineError::NotConfigured(_)
-                | PipelineError::NoMatch
-                | PipelineError::Input(_)
+            Self::Stage { .. } | Self::NotConfigured(_) | Self::NoMatch | Self::Input(_)
         )
     }
 }
 
-/// Output of the built-in INPUT stage.
-#[derive(Debug, Clone)]
+/// Payload that begins the pipeline.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InputPayload {
-    /// Free-form source identifier of the media being analysed.
     pub source: String,
 }
 
 impl InputPayload {
-    /// Creates a new input payload, rejecting empty sources.
     pub fn new(source: impl Into<String>) -> Result<Self, PipelineError> {
         let source = source.into();
         if source.trim().is_empty() {
-            return Err(PipelineError::Input(
-                "source must not be empty".to_string(),
-            ));
+            return Err(PipelineError::Input("source must not be empty".to_string()));
         }
         Ok(Self { source })
     }
 }
 
-/// Engine that analyses face data from the input media.
+/// Boundaries that concrete implementations satisfy. These are dependency
+/// injection contracts only; no implementations exist in this phase.
 #[async_trait]
 pub trait FaceEngine: Send + Sync {
     async fn analyze(&self, input: &InputPayload) -> Result<FaceAnalysis, PipelineError>;
 }
 
-/// Engine that performs reverse-image / facial discovery for a face analysis.
 #[async_trait]
 pub trait DiscoveryEngine: Send + Sync {
     async fn discover(
@@ -161,7 +151,6 @@ pub trait DiscoveryEngine: Send + Sync {
     ) -> Result<Vec<SearchCandidate>, PipelineError>;
 }
 
-/// Engine that verifies discovered candidates against the source face.
 #[async_trait]
 pub trait CandidateVerifier: Send + Sync {
     async fn verify(
@@ -170,7 +159,6 @@ pub trait CandidateVerifier: Send + Sync {
     ) -> Result<Vec<VerificationResult>, PipelineError>;
 }
 
-/// Engine that bundles the selected verified match into an evidence bundle.
 #[async_trait]
 pub trait EvidenceEngine: Send + Sync {
     async fn build_evidence(
@@ -179,26 +167,18 @@ pub trait EvidenceEngine: Send + Sync {
     ) -> Result<EvidenceBundle, PipelineError>;
 }
 
-/// Engine that anchors evidence on-chain and verifies an existing anchor.
 #[async_trait]
 pub trait EvidenceRegistry: Send + Sync {
     async fn register(&self, bundle: EvidenceBundle) -> Result<BlockchainRecord, PipelineError>;
 
-    async fn verify_anchor(
-        &self,
-        tx_hash: &str,
-    ) -> Result<BlockchainRecord, PipelineError>;
+    async fn verify_anchor(&self, tx_hash: &str) -> Result<BlockchainRecord, PipelineError>;
 }
 
-/// Container for the engines that back the pipeline.
+/// Dependency-injection container for the pipeline's engine boundaries.
 ///
-/// Any slot left [`None`] causes the corresponding stage to fail with
-/// [`PipelineError::NotConfigured`]. This is the explicit "not configured"
-/// boundary for unavailable implementations. Engines are stored as [`Arc`] so
-/// they can be cheaply shared into per-stage spawned tasks.
-///
-/// [`Arc`]: std::sync::Arc
-#[derive(Debug, Default, Clone)]
+/// A `None` entry means the corresponding stage is not available and will
+/// report a [`PipelineError::NotConfigured`] error at run time.
+#[derive(Default, Clone)]
 pub struct EngineSet {
     pub face: Option<Arc<dyn FaceEngine>>,
     pub discovery: Option<Arc<dyn DiscoveryEngine>>,
@@ -208,8 +188,73 @@ pub struct EngineSet {
 }
 
 impl EngineSet {
-    /// An engine set with no engines configured.
+    /// An empty set: every engine boundary is `None`.
     pub fn none() -> Self {
         Self::default()
+    }
+}
+
+impl fmt::Debug for EngineSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EngineSet")
+            .field("face", &self.face.is_some())
+            .field("discovery", &self.discovery.is_some())
+            .field("verification", &self.verification.is_some())
+            .field("evidence", &self.evidence.is_some())
+            .field("registry", &self.registry.is_some())
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stage_next_ordering() {
+        assert_eq!(
+            PipelineStage::Input.next(),
+            Some(PipelineStage::FaceAnalysis)
+        );
+        assert_eq!(
+            PipelineStage::Discovery.next(),
+            Some(PipelineStage::CandidateVerification)
+        );
+        assert_eq!(PipelineStage::OnchainVerification.next(), None);
+    }
+
+    #[test]
+    fn stage_index_and_label() {
+        assert_eq!(PipelineStage::Input.index(), 0);
+        assert_eq!(PipelineStage::Input.label(), "INPUT");
+        assert_eq!(PipelineStage::OnchainVerification.index(), 7);
+        assert_eq!(PipelineStage::CandidateVerification.index(), 3);
+    }
+
+    #[test]
+    fn input_payload_rejects_empty_source() {
+        assert!(matches!(
+            InputPayload::new("   "),
+            Err(PipelineError::Input(_))
+        ));
+        assert!(InputPayload::new("image.png").is_ok());
+    }
+
+    #[test]
+    fn error_classification_is_stage_failure() {
+        assert!(PipelineError::NotConfigured(PipelineStage::FaceAnalysis).is_stage_failure());
+        assert!(PipelineError::NoMatch.is_stage_failure());
+        assert!(!PipelineError::Cancelled.is_stage_failure());
+        assert!(!PipelineError::InvalidTransition("x".to_string()).is_stage_failure());
+    }
+
+    #[test]
+    fn engine_set_none_is_all_unconfigured() {
+        let set = EngineSet::none();
+        assert!(set.face.is_none());
+        assert!(set.discovery.is_none());
+        assert!(set.verification.is_none());
+        assert!(set.evidence.is_none());
+        assert!(set.registry.is_none());
     }
 }

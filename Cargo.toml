@@ -11,15 +11,21 @@ members = [
 ]
 resolver = "2"
 
+[workspace.package]
+edition = "2021"
+rust-version = "1.88"
+license = "MIT"
+
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+tokio-util = { version = "0.7", features = ["rt"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tracing = "0.1"
 async-trait = "0.1"
-anyhow = "1.0"
-thiserror = "1.0"
+anyhow = "1"
+thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 url = { version = "2", features = ["serde"] }
 ratatui = "0.30"
-crossterm = "0.28"
+crossterm = "0.29"

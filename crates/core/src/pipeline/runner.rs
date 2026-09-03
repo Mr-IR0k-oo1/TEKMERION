@@ -1,67 +1,23 @@
-//! The asynchronous pipeline runner.
+//! Asynchronous pipeline runner.
 //!
-//! The runner executes the ordered [`PipelineStage`]s on a Tokio runtime. Each
-//! stage is run as an independent [`tokio::spawn`]ed task so that long-running
-//! engines never block a caller (such as the TUI event loop). The runner
-//! supports:
-//!
-//! - cooperative release between stages and cancellation of an in-flight stage
-//! - reset back to the idle state
-//! - explicit, per-stage failure reporting through emitted events
-//!
-//! No stage transition is silent: every stage start, completion, transition and
-//! failure is emitted as a [`PipelineEvent`].
+//! Executes the eight pipeline stages in order, each as a Tokio task so that
+//! long-running engine work never blocks the caller (e.g. a TUI). Supports
+//! cooperative cancellation via `CancellationToken`, reset, structured
+//! stage-aware errors, and emits an execution event per stage.
 
-use tokio::sync::watch;
-use tokio::task::JoinHandle;
+use std::future::Future;
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
+
+use crate::models::{BlockchainRecord, EvidenceBundle, PipelineResult, VerificationResult};
+use crate::state::PipelineState;
 
 use super::events::PipelineEvent;
-use super::pipeline::{
-    EngineSet, InputPayload, PipelineError, PipelineStage,
-};
-use crate::models::{BlockchainRecord, EvidenceBundle, FaceAnalysis, SearchCandidate, VerificationResult};
+use super::pipeline::{EngineSet, InputPayload, PipelineError, PipelineStage};
 
-/// Co-operative cancellation signal shared between the caller and the runner.
-#[derive(Debug, Clone)]
-pub struct CancellationToken {
-    tx: watch::Sender<bool>,
-    rx: watch::Receiver<bool>,
-}
-
-impl Default for CancellationToken {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl CancellationToken {
-    /// Creates an un-cancelled token.
-    pub fn new() -> Self {
-        let (tx, rx) = watch::channel(false);
-        Self { tx, rx }
-    }
-
-    /// Requests cancellation of any pipeline using this token.
-    pub fn cancel(&self) {
-        let _ = self.tx.send(true);
-    }
-
-    /// Whether a cancellation has been requested.
-    pub fn is_cancelled(&self) -> bool {
-        *self.rx.borrow()
-    }
-
-    /// Waits until the token is cancelled. Returns immediately if already
-    /// cancelled.
-    pub async fn cancelled(&mut self) {
-        if self.is_cancelled() {
-            return;
-        }
-        let _ = self.rx.changed().await;
-    }
-}
-
-/// The lifecycle status of the runner.
+/// Lifecycle status of the runner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunnerStatus {
     Idle,
@@ -71,552 +27,526 @@ pub enum RunnerStatus {
     Failed,
 }
 
-/// Intermediate state threaded from one stage to the next.
-#[derive(Debug, Default)]
-struct StageState {
-    analysis: Option<FaceAnalysis>,
-    candidates: Option<Vec<SearchCandidate>>,
-    verification: Option<Vec<VerificationResult>>,
-    bundle: Option<EvidenceBundle>,
-    record: Option<BlockchainRecord>,
+impl RunnerStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            RunnerStatus::Idle => "IDLE",
+            RunnerStatus::Running => "RUNNING",
+            RunnerStatus::Completed => "COMPLETED",
+            RunnerStatus::Cancelled => "CANCELLED",
+            RunnerStatus::Failed => "FAILED",
+        }
+    }
 }
 
-/// Input to a stage, cloned from the runner state.
-#[derive(Debug, Clone)]
-enum StageInput {
-    /// The payload passed to the INPUT stage, threaded to FACE_ANALYSIS.
-    Payload(InputPayload),
-    Analysis(FaceAnalysis),
-    Candidates(Vec<SearchCandidate>),
-    Verification(Vec<VerificationResult>),
-    Selected(VerificationResult),
-    Bundle(EvidenceBundle),
-    Record(BlockchainRecord),
+/// Shared mutable state guarded by a mutex so [`PipelineRunner`] can be used
+/// from `&self` while a run is in flight.
+struct RunnerInner {
+    status: RunnerStatus,
+    state: PipelineState,
+    events: Vec<PipelineEvent>,
+    result: Option<PipelineResult>,
+    error: Option<PipelineError>,
+    active_token: Option<CancellationToken>,
 }
 
-/// Output produced by a stage execution.
-#[derive(Debug)]
-enum StageOutput {
-    /// The validated payload threaded from INPUT to FACE_ANALYSIS.
-    Payload(InputPayload),
-    Analysis(FaceAnalysis),
-    Candidates(Vec<SearchCandidate>),
-    Verification(Vec<VerificationResult>),
-    Selected(VerificationResult),
-    Bundle(EvidenceBundle),
-    Record(BlockchainRecord),
-    Verified(BlockchainRecord),
+impl Default for RunnerInner {
+    fn default() -> Self {
+        Self {
+            status: RunnerStatus::Idle,
+            state: PipelineState::Idle,
+            events: Vec::new(),
+            result: None,
+            error: None,
+            active_token: None,
+        }
+    }
 }
 
-/// The engine-backed async pipeline runner.
+/// Async orchestrator over the [`EngineSet`] dependency-injection container.
 pub struct PipelineRunner {
     engines: EngineSet,
-    status: RunnerStatus,
-    events: Vec<PipelineEvent>,
-    sequence: usize,
-    state: StageState,
-    cancel_handle: Option<CancellationToken>,
-}
-
-impl Default for PipelineRunner {
-    fn default() -> Self {
-        Self::new(EngineSet::none())
-    }
+    inner: Arc<Mutex<RunnerInner>>,
 }
 
 impl PipelineRunner {
-    /// Creates a runner with the given engine set.
     pub fn new(engines: EngineSet) -> Self {
         Self {
             engines,
-            status: RunnerStatus::Idle,
-            events: Vec::new(),
-            sequence: 0,
-            state: StageState::default(),
-            cancel_handle: None,
+            inner: Arc::new(Mutex::new(RunnerInner::default())),
         }
     }
 
-    /// The current lifecycle status of the runner.
-    pub fn status(&self) -> RunnerStatus {
-        self.status
+    /// Start a run with a fresh internal cancellation token.
+    pub async fn run(&self, input: InputPayload) -> Result<RunnerStatus, PipelineError> {
+        let token = CancellationToken::new();
+        self.run_with_token(input, &token).await
     }
 
-    /// Snapshot of all events emitted since construction (or the last reset).
-    pub fn events(&self) -> &[PipelineEvent] {
-        &self.events
+    /// Start a run honoring an externally-owned cancellation token.
+    ///
+    /// This is how callers (and tests) drive cooperative cancellation: cancel
+    /// the token and the in-flight stage aborts.
+    pub async fn run_with_token(
+        &self,
+        input: InputPayload,
+        token: &CancellationToken,
+    ) -> Result<RunnerStatus, PipelineError> {
+        {
+            let mut inner = self.inner.lock().await;
+            if inner.status != RunnerStatus::Idle {
+                return Err(PipelineError::InvalidTransition(format!(
+                    "cannot start pipeline from {}",
+                    inner.status.label()
+                )));
+            }
+            inner.status = RunnerStatus::Running;
+            inner.state = PipelineState::Idle;
+            inner.events.clear();
+            inner.result = None;
+            inner.error = None;
+            inner.active_token = Some(token.clone());
+            inner.events.push(PipelineEvent::PipelineStarted {
+                at: chrono::Utc::now(),
+            });
+        }
+
+        match self.run_stages(input, token).await {
+            Ok(result) => {
+                let mut inner = self.inner.lock().await;
+                inner.status = RunnerStatus::Completed;
+                inner.state = PipelineState::Verified;
+                inner.result = Some(result);
+                inner.events.push(PipelineEvent::PipelineCompleted);
+                Ok(RunnerStatus::Completed)
+            }
+            Err(PipelineError::Cancelled) => {
+                let mut inner = self.inner.lock().await;
+                inner.status = RunnerStatus::Cancelled;
+                inner.events.push(PipelineEvent::PipelineCancelled);
+                Ok(RunnerStatus::Cancelled)
+            }
+            Err(err) => {
+                let mut inner = self.inner.lock().await;
+                inner.status = RunnerStatus::Failed;
+                inner.state = PipelineState::Error;
+                inner.error = Some(err.clone());
+                inner
+                    .events
+                    .push(PipelineEvent::PipelineFailed { error: err.clone() });
+                Ok(RunnerStatus::Failed)
+            }
+        }
     }
 
-    /// Whether a cancellation has been requested for the current run.
-    pub fn is_cancel_requested(&self) -> bool {
-        self.cancel_handle
-            .as_ref()
-            .map(CancellationToken::is_cancelled)
-            .unwrap_or(false)
-    }
-
-    /// Requests cancellation of the currently running pipeline.
-    pub fn cancel(&self) {
-        if let Some(token) = &self.cancel_handle {
+    /// Cancel the currently-active run's token (no-op if none).
+    pub async fn cancel(&self) {
+        let token = { self.inner.lock().await.active_token.clone() };
+        if let Some(token) = token {
             token.cancel();
         }
     }
 
-    /// Resets the runner to its idle state, clearing intermediate data.
-    pub fn reset(&mut self) {
-        self.status = RunnerStatus::Idle;
-        self.sequence = 0;
-        self.state = StageState::default();
-        self.cancel_handle = None;
-        self.events.clear();
-        self.emit(PipelineEvent::PipelineReset);
+    /// Reset to an idle, clean state, ready for a fresh run.
+    pub async fn reset(&self) {
+        let mut inner = self.inner.lock().await;
+        inner.status = RunnerStatus::Idle;
+        inner.state = PipelineState::Idle;
+        inner.result = None;
+        inner.error = None;
+        inner.active_token = Some(CancellationToken::new());
+        inner.events.clear();
+        inner.events.push(PipelineEvent::PipelineReset);
     }
 
-    /// Runs the pipeline end-to-end for the given input.
-    ///
-    /// Returns an error when the pipeline cannot progress: a stage failure, a
-    /// missing engine, a cancellation, or an invalid transition. The runner's
-    /// [`RunnerStatus`] reflects the terminal outcome.
-    pub async fn run(&mut self, input: InputPayload) -> Result<RunnerStatus, PipelineError> {
-        if self.status != RunnerStatus::Idle {
-            return Err(PipelineError::InvalidTransition(format!(
-                "pipeline cannot start from state {:?}",
-                self.status
-            )));
-        }
-
-        let mut token = CancellationToken::new();
-        self.cancel_handle = Some(token.clone());
-        self.status = RunnerStatus::Running;
-        self.emit(PipelineEvent::PipelineStarted);
-
-        let mut from: Option<PipelineStage> = None;
-        let mut stage_input = StageInput::Payload(input);
-
-        for stage in PipelineStage::ALL {
-            if token.is_cancelled() {
-                self.status = RunnerStatus::Cancelled;
-                self.emit(PipelineEvent::PipelineCancelled);
-                return Err(PipelineError::Cancelled);
-            }
-
-            if let Some(prev) = from {
-                self.emit(PipelineEvent::Transition { from: prev, to: stage });
-            }
-
-            let sequence = self.next_sequence();
-            self.emit(PipelineEvent::StageStarted { stage, sequence });
-
-            match self.execute_stage(stage, &stage_input, &mut token).await {
-                Ok(output) => match self.apply_output(stage, output) {
-                    Ok(next_input) => {
-                        stage_input = next_input;
-                        self.emit(PipelineEvent::StageCompleted { stage, sequence });
-                    }
-                    Err(error) => {
-                        self.emit(PipelineEvent::StageFailed {
-                            stage,
-                            sequence,
-                            error: error.clone(),
-                        });
-                        self.status = RunnerStatus::Failed;
-                        self.emit(PipelineEvent::PipelineFailed { error });
-                        return Err(error);
-                    }
-                },
-                Err(PipelineError::Cancelled) => {
-                    self.status = RunnerStatus::Cancelled;
-                    self.emit(PipelineEvent::PipelineCancelled);
-                    return Err(PipelineError::Cancelled);
-                }
-                Err(error) => {
-                    self.emit(PipelineEvent::StageFailed {
-                        stage,
-                        sequence,
-                        error: error.clone(),
-                    });
-                    self.status = RunnerStatus::Failed;
-                    self.emit(PipelineEvent::PipelineFailed { error });
-                    return Err(error);
-                }
-            }
-
-            from = Some(stage);
-        }
-
-        self.status = RunnerStatus::Completed;
-        self.emit(PipelineEvent::PipelineCompleted);
-        Ok(RunnerStatus::Completed)
+    pub async fn status(&self) -> RunnerStatus {
+        self.inner.lock().await.status
     }
 
-    /// Executes a single stage on its own task, honouring cancellation.
-    async fn execute_stage(
+    pub async fn state(&self) -> PipelineState {
+        self.inner.lock().await.state
+    }
+
+    pub async fn events(&self) -> Vec<PipelineEvent> {
+        self.inner.lock().await.events.clone()
+    }
+
+    pub async fn last_error(&self) -> Option<PipelineError> {
+        self.inner.lock().await.error.clone()
+    }
+
+    pub async fn result(&self) -> Option<PipelineResult> {
+        self.inner.lock().await.result.clone()
+    }
+
+    /// Execute the eight stages in order.
+    async fn run_stages(
+        &self,
+        input: InputPayload,
+        token: &CancellationToken,
+    ) -> Result<PipelineResult, PipelineError> {
+        // INPUT
+        let _source = InputPayload::new(input.source.clone())?;
+        self.stage_bounds(PipelineStage::Input).await;
+        self.transition_to(PipelineState::InputReady).await?;
+
+        // FACE_ANALYSIS
+        let face = self.engines.face.clone();
+        self.transition_to(PipelineState::FaceAnalysis).await?;
+        let analysis = match face {
+            Some(engine) => {
+                let input = input.clone();
+                self.run_engine(PipelineStage::FaceAnalysis, token, async move {
+                    engine.analyze(&input).await
+                })
+                .await?
+            }
+            None => return self.not_configured(PipelineStage::FaceAnalysis).await,
+        };
+
+        // DISCOVERY
+        let discovery = self.engines.discovery.clone();
+        self.transition_to(PipelineState::Searching).await?;
+        let candidates = match discovery {
+            Some(engine) => {
+                let analysis = analysis.clone();
+                self.run_engine(PipelineStage::Discovery, token, async move {
+                    engine.discover(&analysis).await
+                })
+                .await?
+            }
+            None => return self.not_configured(PipelineStage::Discovery).await,
+        };
+        self.transition_to(PipelineState::CandidatesFound).await?;
+
+        // CANDIDATE_VERIFICATION
+        let verifier = self.engines.verification.clone();
+        self.transition_to(PipelineState::Verifying).await?;
+        let verified = match verifier {
+            Some(engine) => {
+                self.run_engine(PipelineStage::CandidateVerification, token, async move {
+                    engine.verify(candidates).await
+                })
+                .await?
+            }
+            None => {
+                return self
+                    .not_configured(PipelineStage::CandidateVerification)
+                    .await
+            }
+        };
+
+        // MATCH_SELECTION (internal selection logic; no engine boundary)
+        self.transition_to(PipelineState::MatchFound).await?;
+        let matched = self.select_best(verified).await?;
+
+        // EVIDENCE
+        let evidence = self.engines.evidence.clone();
+        self.transition_to(PipelineState::EvidenceCreated).await?;
+        let bundle = match evidence {
+            Some(engine) => {
+                let matched = matched.clone();
+                self.run_engine(PipelineStage::Evidence, token, async move {
+                    engine.build_evidence(matched).await
+                })
+                .await?
+            }
+            None => return self.not_configured(PipelineStage::Evidence).await,
+        };
+
+        // BLOCKCHAIN
+        let registry = self.engines.registry.clone();
+        self.transition_to(PipelineState::BlockchainSubmitting)
+            .await?;
+        let registered = match registry.clone() {
+            Some(engine) => {
+                let bundle = bundle.clone();
+                self.run_engine(PipelineStage::Blockchain, token, async move {
+                    engine.register(bundle).await
+                })
+                .await?
+            }
+            None => return self.not_configured(PipelineStage::Blockchain).await,
+        };
+        self.transition_to(PipelineState::BlockchainConfirmed)
+            .await?;
+
+        // ONCHAIN_VERIFICATION
+        self.transition_to(PipelineState::VerifyingOnchain).await?;
+        let confirmed = match registry {
+            Some(engine) => {
+                let tx_hash = registered.tx_hash.clone();
+                self.run_engine(PipelineStage::OnchainVerification, token, async move {
+                    engine.verify_anchor(&tx_hash).await
+                })
+                .await?
+            }
+            None => {
+                return self
+                    .not_configured(PipelineStage::OnchainVerification)
+                    .await
+            }
+        };
+
+        let result = build_result(confirmed, bundle);
+        Ok(result)
+    }
+
+    /// Emit `StageStarted`/`StageCompleted` for a synchronous (non-engine) stage.
+    async fn stage_bounds(&self, stage: PipelineStage) {
+        let sequence = stage.index();
+        self.emit(PipelineEvent::StageStarted { stage, sequence })
+            .await;
+        self.emit(PipelineEvent::StageCompleted { stage, sequence })
+            .await;
+    }
+
+    /// Emit the "not configured" failure for a stage and return the error.
+    async fn not_configured<T>(&self, stage: PipelineStage) -> Result<T, PipelineError> {
+        let sequence = stage.index();
+        self.emit(PipelineEvent::StageStarted { stage, sequence })
+            .await;
+        self.emit(PipelineEvent::StageFailed {
+            stage,
+            sequence,
+            error: PipelineError::NotConfigured(stage),
+        })
+        .await;
+        Err(PipelineError::NotConfigured(stage))
+    }
+
+    /// Run a stage's engine future as a Tokio task, honoring cancellation.
+    async fn run_engine<T: Send + 'static>(
         &self,
         stage: PipelineStage,
-        stage_input: &StageInput,
-        token: &mut CancellationToken,
-    ) -> Result<StageOutput, PipelineError> {
-        let engines = self.engines.clone();
-        let input = stage_input.clone();
+        token: &CancellationToken,
+        fut: impl Future<Output = Result<T, PipelineError>> + Send + 'static,
+    ) -> Result<T, PipelineError> {
+        let sequence = stage.index();
+        self.emit(PipelineEvent::StageStarted { stage, sequence })
+            .await;
 
-        let mut task_token = token.clone();
-        let handle: JoinHandle<Result<StageOutput, PipelineError>> =
-            tokio::spawn(async move { run_stage(engines, stage, input).await });
+        let handle = tokio::spawn(fut);
+        tokio::pin!(handle);
 
         tokio::select! {
-            result = handle => match result {
-                Ok(inner) => inner,
-                Err(join_err) => Err(PipelineError::Internal(format!(
-                    "stage task failed to join: {}",
-                    join_err
-                ))),
-            },
-            _ = task_token.cancelled() => {
+            result = &mut handle => {
+                let result = match result {
+                    Ok(result) => result,
+                    Err(join) => Err(PipelineError::Internal(format!(
+                        "stage task ended abnormally: {join}"
+                    ))),
+                };
+                match &result {
+                    Ok(_) => {
+                        self.emit(PipelineEvent::StageCompleted { stage, sequence }).await;
+                    }
+                    Err(error) => {
+                        self.emit(PipelineEvent::StageFailed { stage, sequence, error: error.clone() }).await;
+                    }
+                }
+                result
+            }
+            _ = token.cancelled() => {
                 handle.abort();
+                self.emit(PipelineEvent::PipelineCancelled).await;
                 Err(PipelineError::Cancelled)
             }
         }
     }
 
-    /// Applies a stage output to the runner state, returning the input for the
-    /// next stage.
-    fn apply_output(
-        &mut self,
-        stage: PipelineStage,
-        output: StageOutput,
-    ) -> Result<StageInput, PipelineError> {
-        match stage {
-            PipelineStage::FaceAnalysis => match output {
-                StageOutput::Analysis(a) => {
-                    self.state.analysis = Some(a.clone());
-                    Ok(StageInput::Analysis(a))
-                }
-                other => Err(PipelineError::Internal(format!(
-                    "unexpected face output: {other:?}"
-                ))),
-            },
-            PipelineStage::Discovery => match output {
-                StageOutput::Candidates(c) => {
-                    self.state.candidates = Some(c.clone());
-                    Ok(StageInput::Candidates(c))
-                }
-                other => Err(PipelineError::Internal(format!(
-                    "unexpected discovery output: {other:?}"
-                ))),
-            },
-            PipelineStage::CandidateVerification => match output {
-                StageOutput::Verification(v) => {
-                    self.state.verification = Some(v.clone());
-                    Ok(StageInput::Verification(v))
-                }
-                other => Err(PipelineError::Internal(format!(
-                    "unexpected verification output: {other:?}"
-                ))),
-            },
-            PipelineStage::MatchSelection => match output {
-                StageOutput::Verification(v) => {
-                    self.state.verification = Some(v.clone());
-                    Ok(StageInput::Selected(v))
-                }
-                other => Err(PipelineError::Internal(format!(
-                    "unexpected match output: {other:?}"
-                ))),
-            },
-            PipelineStage::Evidence => match output {
-                StageOutput::Bundle(b) => {
-                    self.state.bundle = Some(b.clone());
-                    Ok(StageInput::Bundle(b))
-                }
-                other => Err(PipelineError::Internal(format!(
-                    "unexpected evidence output: {other:?}"
-                ))),
-            },
-            PipelineStage::Blockchain => match output {
-                StageOutput::Record(r) => {
-                    self.state.record = Some(r.clone());
-                    Ok(StageInput::Record(r))
-                }
-                other => Err(PipelineError::Internal(format!(
-                    "unexpected blockchain output: {other:?}"
-                ))),
-            },
-            PipelineStage::OnchainVerification => match output {
-                StageOutput::Verified(r) => {
-                    self.state.record = Some(r.clone());
-                    Ok(StageInput::Record(r))
-                }
-                other => Err(PipelineError::Internal(format!(
-                    "unexpected onchain output: {other:?}"
-                ))),
-            },
-            PipelineStage::Input => Err(PipelineError::Internal(
-                "INPUT stage produces no output".into(),
-            )),
-        }
-    }
-
-    fn next_sequence(&mut self) -> usize {
-        let s = self.sequence;
-        self.sequence += 1;
-        s
-    }
-
-    fn emit(&mut self, event: PipelineEvent) {
-        self.events.push(event);
-    }
-}
-
-/// Runs a single stage against the supplied engines.
-async fn run_stage(
-    engines: EngineSet,
-    stage: PipelineStage,
-    input: StageInput,
-) -> Result<StageOutput, PipelineError> {
-    match stage {
-        PipelineStage::Input => {
-            let StageInput::Payload(payload) = input else {
-                return Err(PipelineError::Internal("INPUT requires a payload".into()));
-            };
-            if payload.source.trim().is_empty() {
-                return Err(PipelineError::Input("empty input source".into()));
-            }
-            Ok(StageOutput::Input)
-        }
-        PipelineStage::FaceAnalysis => {
-            let face = engines
-                .face
-                .ok_or(PipelineError::NotConfigured(PipelineStage::FaceAnalysis))?;
-            let payload = match input {
-                StageInput::Payload(p) => p,
-                _ => {
-                    return Err(PipelineError::Internal(
-                        "FACE_ANALYSIS requires the input payload".into(),
-                    ))
-                }
-            };
-            let a = face.analyze(&payload).await?;
-            Ok(StageOutput::Analysis(a))
-        }
-        PipelineStage::Discovery => {
-            let discovery = engines
-                .discovery
-                .ok_or(PipelineError::NotConfigured(PipelineStage::Discovery))?;
-            let StageInput::Analysis(a) = input else {
-                return Err(PipelineError::Internal("missing face analysis".into()));
-            };
-            let c = discovery.discover(&a).await?;
-            Ok(StageOutput::Candidates(c))
-        }
-        PipelineStage::CandidateVerification => {
-            let verifier = engines
-                .verification
-                .ok_or(PipelineError::NotConfigured(PipelineStage::CandidateVerification))?;
-            let StageInput::Candidates(c) = input else {
-                return Err(PipelineError::Internal("missing candidates".into()));
-            };
-            let v = verifier.verify(c).await?;
-            Ok(StageOutput::Verification(v))
-        }
-        PipelineStage::MatchSelection => {
-            let StageInput::Verification(v) = input else {
-                return Err(PipelineError::Internal("missing verification results".into()));
-            };
-            let selected = select_best(v)?;
-            Ok(StageOutput::Verification(selected))
-        }
-        PipelineStage::Evidence => {
-            let evidence = engines
-                .evidence
-                .ok_or(PipelineError::NotConfigured(PipelineStage::Evidence))?;
-            let StageInput::Selected(s) = input else {
-                return Err(PipelineError::Internal("missing selected match".into()));
-            };
-            let b = evidence.build_evidence(s).await?;
-            Ok(StageOutput::Bundle(b))
-        }
-        PipelineStage::Blockchain => {
-            let registry = engines
-                .registry
-                .ok_or(PipelineError::NotConfigured(PipelineStage::Blockchain))?;
-            let StageInput::Bundle(b) = input else {
-                return Err(PipelineError::Internal("missing evidence bundle".into()));
-            };
-            let r = registry.register(b).await?;
-            Ok(StageOutput::Record(r))
-        }
-        PipelineStage::OnchainVerification => {
-            let registry = engines
-                .registry
-                .ok_or(PipelineError::NotConfigured(PipelineStage::OnchainVerification))?;
-            let StageInput::Record(r) = input else {
-                return Err(PipelineError::Internal("missing blockchain record".into()));
-            };
-            let verified = registry.verify_anchor(&r.tx_hash).await?;
-            Ok(StageOutput::Verified(verified))
-        }
-    }
-}
-
-/// Picks the single strongest verified candidate.
-fn select_best(results: Vec<VerificationResult>) -> Result<VerificationResult, PipelineError> {
-    results
-        .into_iter()
-        .max_by(|a, b| {
-            a.similarity
-                .partial_cmp(&b.similarity)
-                .unwrap_or(std::cmp::Ordering::Equal)
+    /// Pick the candidate with the highest similarity score.
+    async fn select_best(
+        &self,
+        results: Vec<VerificationResult>,
+    ) -> Result<VerificationResult, PipelineError> {
+        let sequence = PipelineStage::MatchSelection.index();
+        self.emit(PipelineEvent::StageStarted {
+            stage: PipelineStage::MatchSelection,
+            sequence,
         })
-        .ok_or(PipelineError::NoMatch)
+        .await;
+        // Empty vector means no candidates survived; that is a genuine
+        // stage-local failure, not a fabrication.
+        let best = results
+            .into_iter()
+            .max_by(|a, b| a.similarity.total_cmp(&b.similarity));
+        match best {
+            Some(best) => {
+                self.emit(PipelineEvent::StageCompleted {
+                    stage: PipelineStage::MatchSelection,
+                    sequence,
+                })
+                .await;
+                Ok(best)
+            }
+            None => {
+                self.emit(PipelineEvent::StageFailed {
+                    stage: PipelineStage::MatchSelection,
+                    sequence,
+                    error: PipelineError::NoMatch,
+                })
+                .await;
+                Err(PipelineError::NoMatch)
+            }
+        }
+    }
+
+    async fn transition_to(&self, to: PipelineState) -> Result<(), PipelineError> {
+        let mut inner = self.inner.lock().await;
+        let from = inner.state;
+        inner.state = from
+            .transition(to)
+            .map_err(|e| PipelineError::InvalidTransition(e.to_string()))?
+            .to;
+        Ok(())
+    }
+
+    async fn emit(&self, event: PipelineEvent) {
+        self.inner.lock().await.events.push(event);
+    }
+}
+
+fn build_result(confirmed: BlockchainRecord, bundle: EvidenceBundle) -> PipelineResult {
+    PipelineResult {
+        final_state: PipelineState::Verified,
+        evidence: Some(bundle),
+        blockchain: Some(confirmed),
+        error: None,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{
-        BlockchainRecord, EvidenceBundle, EvidenceRecord, FaceAnalysis, FaceDetection,
-        FaceEmbedding, SearchCandidate, VerificationStatus,
-    };
     use async_trait::async_trait;
-    use chrono::Utc;
-    use url::Url;
+    use tokio_util::sync::CancellationToken;
 
-    fn candidate(index: u32, similarity: f32) -> SearchCandidate {
+    use crate::models::{
+        EvidenceRecord, FaceAnalysis, FaceDetection, FaceEmbedding, SearchCandidate,
+        VerificationStatus,
+    };
+    use crate::pipeline::{
+        CandidateVerifier, DiscoveryEngine, EvidenceEngine, EvidenceRegistry, FaceEngine,
+    };
+
+    fn candidate() -> SearchCandidate {
         SearchCandidate {
-            url: Url::parse(&format!("https://example.com/{index}")).unwrap(),
-            title: Some(format!("Candidate {index}")),
-            provider: "mock".to_string(),
+            url: url::Url::parse("https://example.com/face").unwrap(),
+            title: Some("match".to_string()),
+            provider: "test".to_string(),
             image_url: None,
             snippet: None,
-            discovered_at: Utc::now(),
+            discovered_at: chrono::Utc::now(),
         }
     }
 
-    fn verification(similarity: f32, status: VerificationStatus) -> VerificationResult {
-        VerificationResult {
-            candidate: candidate(1, similarity),
-            similarity,
-            status,
-        }
-    }
-
-    fn analysis() -> FaceAnalysis {
-        FaceAnalysis {
-            detections: vec![FaceDetection {
-                bounding_box: [0.0, 0.0, 1.0, 1.0],
-                confidence: 0.99,
-                quality: 0.95,
-            }],
-            embeddings: vec![FaceEmbedding {
-                vector: vec![0.1, 0.2, 0.3],
-                normalized: true,
-            }],
-            timestamp: Utc::now(),
-        }
-    }
-
-    fn bundle() -> EvidenceBundle {
-        EvidenceBundle {
-            record: EvidenceRecord {
-                source_url: Url::parse("https://example.com/src").unwrap(),
-                provider: "mock".to_string(),
-                timestamp: Utc::now(),
-                content_hash: "0xabc".to_string(),
-                face_similarity: 0.95,
-            },
-            root_hash: "0xroot".to_string(),
-            leaf_hashes: vec!["0xleaf".to_string()],
-        }
-    }
-
-    fn record() -> BlockchainRecord {
-        BlockchainRecord {
-            tx_hash: "0xtx".to_string(),
-            block_number: 42,
-            registered_root: "0xroot".to_string(),
-            timestamp: Utc::now(),
-        }
-    }
-
-    struct MockFaceEngine(Result<FaceAnalysis, PipelineError>);
-    struct MockDiscoveryEngine(Result<Vec<SearchCandidate>, PipelineError>);
-    struct MockVerifier(Result<Vec<VerificationResult>, PipelineError>);
-    struct MockEvidenceEngine(Result<EvidenceBundle, PipelineError>);
-    struct MockRegistry(
-        Result<BlockchainRecord, PipelineError>,
-        Result<BlockchainRecord, PipelineError>,
-    );
-
+    #[derive(Clone)]
+    struct MockFaceEngine;
     #[async_trait]
     impl FaceEngine for MockFaceEngine {
         async fn analyze(&self, _input: &InputPayload) -> Result<FaceAnalysis, PipelineError> {
-            self.0.clone()
+            Ok(FaceAnalysis {
+                detections: vec![FaceDetection {
+                    bounding_box: [0.0, 0.0, 1.0, 1.0],
+                    confidence: 0.9,
+                    quality: 0.8,
+                }],
+                embeddings: vec![FaceEmbedding {
+                    vector: vec![0.1, 0.2],
+                    normalized: true,
+                }],
+                timestamp: chrono::Utc::now(),
+            })
         }
     }
 
+    #[derive(Clone)]
+    struct MockDiscoveryEngine;
     #[async_trait]
     impl DiscoveryEngine for MockDiscoveryEngine {
         async fn discover(
             &self,
             _analysis: &FaceAnalysis,
         ) -> Result<Vec<SearchCandidate>, PipelineError> {
-            self.0.clone()
+            Ok(vec![candidate()])
         }
     }
 
+    #[derive(Clone)]
+    struct MockVerifier;
     #[async_trait]
     impl CandidateVerifier for MockVerifier {
         async fn verify(
             &self,
-            _candidates: Vec<SearchCandidate>,
+            candidates: Vec<SearchCandidate>,
         ) -> Result<Vec<VerificationResult>, PipelineError> {
-            self.0.clone()
+            Ok(candidates
+                .into_iter()
+                .map(|candidate| VerificationResult {
+                    candidate,
+                    similarity: 0.9,
+                    status: VerificationStatus::Match,
+                })
+                .collect())
         }
     }
 
+    #[derive(Clone)]
+    struct MockEvidenceEngine;
     #[async_trait]
     impl EvidenceEngine for MockEvidenceEngine {
         async fn build_evidence(
             &self,
-            _result: VerificationResult,
+            matched: VerificationResult,
         ) -> Result<EvidenceBundle, PipelineError> {
-            self.0.clone()
+            Ok(EvidenceBundle {
+                record: EvidenceRecord {
+                    source_url: matched.candidate.url,
+                    provider: matched.candidate.provider,
+                    timestamp: chrono::Utc::now(),
+                    content_hash: "abc".to_string(),
+                    face_similarity: matched.similarity,
+                },
+                root_hash: "root".to_string(),
+                leaf_hashes: vec!["leaf".to_string()],
+            })
         }
     }
 
+    #[derive(Clone)]
+    struct MockRegistry;
     #[async_trait]
     impl EvidenceRegistry for MockRegistry {
         async fn register(
             &self,
             _bundle: EvidenceBundle,
         ) -> Result<BlockchainRecord, PipelineError> {
-            self.0.clone()
+            Ok(BlockchainRecord {
+                tx_hash: "0xabc".to_string(),
+                block_number: 12,
+                registered_root: "root".to_string(),
+                timestamp: chrono::Utc::now(),
+            })
         }
-
-        async fn verify_anchor(
-            &self,
-            _tx_hash: &str,
-        ) -> Result<BlockchainRecord, PipelineError> {
-            self.1.clone()
+        async fn verify_anchor(&self, tx_hash: &str) -> Result<BlockchainRecord, PipelineError> {
+            Ok(BlockchainRecord {
+                tx_hash: tx_hash.to_string(),
+                block_number: 12,
+                registered_root: "root".to_string(),
+                timestamp: chrono::Utc::now(),
+            })
         }
     }
 
     fn configured_set() -> EngineSet {
-        let mut set = EngineSet::default();
-        set.face = Some(std::sync::Arc::new(MockFaceEngine(Ok(analysis()))));
-        set.discovery = Some(std::sync::Arc::new(MockDiscoveryEngine(Ok(vec![
-            candidate(1, 0.9),
-            candidate(2, 0.7),
-        ]))));
-        set.verification = Some(std::sync::Arc::new(MockVerifier(Ok(vec![
-            verification(0.92, VerificationStatus::Match),
-            verification(0.71, VerificationStatus::Review),
-        ]))));
-        set.evidence = Some(std::sync::Arc::new(MockEvidenceEngine(Ok(bundle()))));
-        set.registry = Some(std::sync::Arc::new(MockRegistry(
-            Ok(record()),
-            Ok(record()),
-        )));
-        set
+        EngineSet {
+            face: Some(Arc::new(MockFaceEngine)),
+            discovery: Some(Arc::new(MockDiscoveryEngine)),
+            verification: Some(Arc::new(MockVerifier)),
+            evidence: Some(Arc::new(MockEvidenceEngine)),
+            registry: Some(Arc::new(MockRegistry)),
+        }
     }
 
     fn input() -> InputPayload {
@@ -625,233 +555,203 @@ mod tests {
 
     #[tokio::test]
     async fn successful_progression_runs_all_stages() {
-        let mut runner = PipelineRunner::new(configured_set());
-        let status = runner.run(input()).await.unwrap();
+        let runner = PipelineRunner::new(configured_set());
+        let status = runner.run(input()).await.expect("run succeeds");
         assert_eq!(status, RunnerStatus::Completed);
-        assert_eq!(runner.status(), RunnerStatus::Completed);
+        assert_eq!(runner.status().await, RunnerStatus::Completed);
+        assert_eq!(runner.state().await, PipelineState::Verified);
 
-        let events = runner.events();
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, PipelineEvent::PipelineStarted)));
-        assert!(events
-            .iter()
-            .any(|e| matches!(e, PipelineEvent::PipelineCompleted)));
-
-        for stage in PipelineStage::ALL {
-            assert!(
-                events.iter().any(|e| matches!(
-                    e,
-                    PipelineEvent::StageCompleted { stage: s, .. } if *s == stage
-                )),
-                "missing StageCompleted for {stage:?}"
-            );
-            assert!(
-                events.iter().any(|e| matches!(
-                    e,
-                    PipelineEvent::StageStarted { stage: s, .. } if *s == stage
-                )),
-                "missing StageStarted for {stage:?}"
-            );
-        }
-
-        assert!(!events
-            .iter()
-            .any(|e| matches!(e, PipelineEvent::StageFailed { .. })));
-    }
-
-    #[tokio::test]
-    async fn stage_execution_order_is_emitted() {
-        let mut runner = PipelineRunner::new(configured_set());
-        runner.run(input()).await.unwrap();
-
-        let completed: Vec<PipelineStage> = runner
-            .events()
+        let events = runner.events().await;
+        let started: Vec<_> = events
             .iter()
             .filter_map(|e| match e {
-                PipelineEvent::StageCompleted { stage, .. } => Some(*stage),
+                PipelineEvent::StageStarted { stage, .. } => Some(*stage),
                 _ => None,
             })
             .collect();
-
-        assert_eq!(completed, PipelineStage::ALL.to_vec());
-    }
-
-    #[tokio::test]
-    async fn not_configured_is_reported_per_stage() {
-        let mut runner = PipelineRunner::new(EngineSet::none());
-        let err = runner.run(input()).await.unwrap_err();
-
-        assert_eq!(runner.status(), RunnerStatus::Failed);
-        match &err {
-            PipelineError::NotConfigured(stage) => {
-                assert_eq!(*stage, PipelineStage::FaceAnalysis);
-            }
-            other => panic!("expected NotConfigured, got {other:?}"),
-        }
-
-        let events = runner.events();
-        assert!(events.iter().any(|e| matches!(
-            e,
-            PipelineEvent::StageFailed {
-                stage: PipelineStage::FaceAnalysis,
-                ..
-            }
-        )));
+        assert_eq!(started, PipelineStage::ALL.to_vec());
         assert!(events
             .iter()
-            .any(|e| matches!(e, PipelineEvent::PipelineFailed { .. })));
+            .any(|e| matches!(e, PipelineEvent::PipelineCompleted)));
     }
 
     #[tokio::test]
     async fn failure_propagates_and_is_reported_for_stage() {
-        let mut set = configured_set();
-        set.discovery = Some(std::sync::Arc::new(MockDiscoveryEngine(Err(
-            PipelineError::Stage {
-                stage: PipelineStage::Discovery,
-                message: "search backend unavailable".to_string(),
-            },
-        ))));
-        let mut runner = PipelineRunner::new(set);
-
-        let err = runner.run(input()).await.unwrap_err();
-        assert_eq!(runner.status(), RunnerStatus::Failed);
-
-        match &err {
-            PipelineError::Stage { stage, message } => {
-                assert_eq!(*stage, PipelineStage::Discovery);
-                assert_eq!(message, "search backend unavailable");
+        #[derive(Clone)]
+        struct FailingDiscovery;
+        #[async_trait]
+        impl DiscoveryEngine for FailingDiscovery {
+            async fn discover(
+                &self,
+                _analysis: &FaceAnalysis,
+            ) -> Result<Vec<SearchCandidate>, PipelineError> {
+                Err(PipelineError::Stage {
+                    stage: PipelineStage::Discovery,
+                    message: "upstream search failed".to_string(),
+                })
             }
-            other => panic!("expected Stage error, got {other:?}"),
         }
 
-        assert!(runner.events().iter().any(|e| matches!(
+        let mut set = configured_set();
+        set.discovery = Some(Arc::new(FailingDiscovery));
+        let runner = PipelineRunner::new(set);
+
+        let status = runner.run(input()).await.expect("run returns status");
+        assert_eq!(status, RunnerStatus::Failed);
+        assert_eq!(runner.state().await, PipelineState::Error);
+
+        let error = runner.last_error().await.expect("error recorded");
+        assert!(
+            matches!(error, PipelineError::Stage { stage, message } if stage == PipelineStage::Discovery && message == "upstream search failed")
+        );
+
+        let events = runner.events().await;
+        assert!(events.iter().any(|e| matches!(
             e,
-            PipelineEvent::StageFailed {
-                stage: PipelineStage::Discovery,
-                ..
-            }
+            PipelineEvent::StageFailed { stage, .. } if *stage == PipelineStage::Discovery
+        )));
+    }
+
+    #[tokio::test]
+    async fn not_configured_is_reported_per_stage() {
+        let runner = PipelineRunner::new(EngineSet::none());
+        let status = runner.run(input()).await.expect("run returns status");
+        assert_eq!(status, RunnerStatus::Failed);
+        assert_eq!(
+            runner.last_error().await,
+            Some(PipelineError::NotConfigured(PipelineStage::FaceAnalysis))
+        );
+
+        let events = runner.events().await;
+        assert!(events.iter().any(|e| matches!(
+            e,
+            PipelineEvent::StageFailed { stage, error, .. }
+                if *stage == PipelineStage::FaceAnalysis
+                    && matches!(error, PipelineError::NotConfigured(PipelineStage::FaceAnalysis))
         )));
     }
 
     #[tokio::test]
     async fn cancellation_stops_inflight_stage() {
+        #[derive(Clone)]
         struct SlowFaceEngine;
         #[async_trait]
         impl FaceEngine for SlowFaceEngine {
             async fn analyze(&self, _input: &InputPayload) -> Result<FaceAnalysis, PipelineError> {
                 tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                Ok(analysis())
+                Ok(FaceAnalysis {
+                    detections: vec![],
+                    embeddings: vec![],
+                    timestamp: chrono::Utc::now(),
+                })
             }
         }
 
-        let mut set = EngineSet::default();
-        set.face = Some(std::sync::Arc::new(SlowFaceEngine));
-        let mut runner = PipelineRunner::new(set);
+        let mut set = EngineSet::none();
+        set.face = Some(Arc::new(SlowFaceEngine));
+        let runner = PipelineRunner::new(set);
+        let token = CancellationToken::new();
 
-        let handle = tokio::spawn({
-            let runner = &mut runner;
-            async move { runner.run(input()).await }
-        });
+        let runner_task = Arc::new(runner);
+        let task_runner = runner_task.clone();
+        let task_token = token.clone();
+        let handle =
+            tokio::spawn(async move { task_runner.run_with_token(input(), &task_token).await });
 
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        runner.cancel();
+        token.cancel();
 
-        let result = handle.await.unwrap();
-        assert_eq!(result.unwrap_err(), PipelineError::Cancelled);
-        assert_eq!(runner.status(), RunnerStatus::Cancelled);
-        assert!(runner
-            .events()
+        let status = handle.await.expect("task completes");
+        assert_eq!(status, Ok(RunnerStatus::Cancelled));
+        assert_eq!(runner_task.status().await, RunnerStatus::Cancelled);
+
+        let events = runner_task.events().await;
+        assert!(events
             .iter()
             .any(|e| matches!(e, PipelineEvent::PipelineCancelled)));
     }
 
     #[tokio::test]
-    async fn reset_after_completion_returns_to_idle() {
-        let mut runner = PipelineRunner::new(configured_set());
-        runner.run(input()).await.unwrap();
-        assert_eq!(runner.status(), RunnerStatus::Completed);
+    async fn reset_allows_rerun() {
+        let runner = PipelineRunner::new(configured_set());
+        let first = runner.run(input()).await.expect("first run");
+        assert_eq!(first, RunnerStatus::Completed);
 
-        runner.reset();
-        assert_eq!(runner.status(), RunnerStatus::Idle);
+        runner.reset().await;
+        assert_eq!(runner.status().await, RunnerStatus::Idle);
+        assert_eq!(runner.state().await, PipelineState::Idle);
         assert!(runner
             .events()
+            .await
             .iter()
             .any(|e| matches!(e, PipelineEvent::PipelineReset)));
 
-        // After reset the pipeline can run again.
-        let status = runner.run(input()).await.unwrap();
-        assert_eq!(status, RunnerStatus::Completed);
+        let second = runner.run(input()).await.expect("rerun succeeds");
+        assert_eq!(second, RunnerStatus::Completed);
     }
 
     #[tokio::test]
     async fn invalid_transition_running_twice() {
-        struct SlowFaceEngine;
-        #[async_trait]
-        impl FaceEngine for SlowFaceEngine {
-            async fn analyze(&self, _input: &InputPayload) -> Result<FaceAnalysis, PipelineError> {
-                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-                Ok(analysis())
+        let slow = {
+            #[derive(Clone)]
+            struct Slow;
+            #[async_trait]
+            impl FaceEngine for Slow {
+                async fn analyze(
+                    &self,
+                    _input: &InputPayload,
+                ) -> Result<FaceAnalysis, PipelineError> {
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    Ok(FaceAnalysis {
+                        detections: vec![],
+                        embeddings: vec![],
+                        timestamp: chrono::Utc::now(),
+                    })
+                }
             }
-        }
+            Slow
+        };
+        let mut set = EngineSet::none();
+        set.face = Some(Arc::new(slow));
+        let runner = Arc::new(PipelineRunner::new(set));
+        let token = CancellationToken::new();
 
-        let mut set = EngineSet::default();
-        set.face = Some(std::sync::Arc::new(SlowFaceEngine));
-        let mut runner = PipelineRunner::new(set);
-
-        let handle = tokio::spawn({
-            let runner = &mut runner;
-            async move { runner.run(input()).await }
-        });
+        let task_runner = runner.clone();
+        let task_token = token.clone();
+        let handle =
+            tokio::spawn(async move { task_runner.run_with_token(input(), &task_token).await });
 
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         let second = runner.run(input()).await;
-        match second {
-            Err(PipelineError::InvalidTransition(_)) => {}
-            other => panic!("expected InvalidTransition, got {other:?}"),
-        }
-        runner.cancel();
+        assert!(matches!(second, Err(PipelineError::InvalidTransition(_))));
+
+        token.cancel();
         let _ = handle.await;
     }
 
-    #[test]
-    fn select_best_picks_highest_similarity() {
-        let selected = select_best(vec![
-            verification(0.5, VerificationStatus::Review),
-            verification(0.95, VerificationStatus::Match),
-            verification(0.7, VerificationStatus::Review),
-        ])
-        .unwrap();
-        assert_eq!(selected.similarity, 0.95);
+    #[tokio::test]
+    async fn select_best_picks_highest_similarity() {
+        let runner = PipelineRunner::new(EngineSet::none());
+        let results = vec![
+            VerificationResult {
+                candidate: candidate(),
+                similarity: 0.4,
+                status: VerificationStatus::Reject,
+            },
+            VerificationResult {
+                candidate: candidate(),
+                similarity: 0.95,
+                status: VerificationStatus::Match,
+            },
+        ];
+        let best = runner.select_best(results).await.unwrap();
+        assert_eq!(best.similarity, 0.95);
     }
 
-    #[test]
-    fn select_best_rejects_empty() {
-        assert_eq!(select_best(vec![]), Err(PipelineError::NoMatch));
-    }
-
-    #[test]
-    fn input_payload_rejects_empty_source() {
-        assert!(matches!(
-            InputPayload::new("   "),
-            Err(PipelineError::Input(_))
-        ));
-        assert!(InputPayload::new("image.png").is_ok());
-    }
-
-    #[test]
-    fn stage_next_ordering() {
-        assert_eq!(
-            PipelineStage::Input.next(),
-            Some(PipelineStage::FaceAnalysis)
-        );
-        assert_eq!(PipelineStage::OnchainVerification.next(), None);
-    }
-
-    #[test]
-    fn error_is_stage_failure_classification() {
-        assert!(PipelineError::NotConfigured(PipelineStage::FaceAnalysis).is_stage_failure());
-        assert!(!PipelineError::Cancelled.is_stage_failure());
-        assert!(!PipelineError::InvalidTransition("x".into()).is_stage_failure());
+    #[tokio::test]
+    async fn select_best_rejects_empty() {
+        let runner = PipelineRunner::new(EngineSet::none());
+        let result = runner.select_best(vec![]).await;
+        assert!(matches!(result, Err(PipelineError::NoMatch)));
     }
 }

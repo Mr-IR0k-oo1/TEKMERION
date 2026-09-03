@@ -1,16 +1,11 @@
 [package]
 name = "tekmerion-tui"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 tekmerion-core = { path = "../../crates/core" }
-tokio = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 anyhow = { workspace = true }
-tracing = { workspace = true }
-chrono = { workspace = true }
-url = { workspace = true }

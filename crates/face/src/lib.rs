@@ -1,1 +1,14 @@
-pub fn init() {}
+//! TEKMERION local face-analysis worker client.
+//!
+//! This crate spawns the bundled Python worker (`workers/face/worker.py`) and
+//! communicates with it over stdin/stdout JSON Lines. It implements the
+//! [`tekmerion_core::FaceEngine`] dependency-injection boundary so the pipeline
+//! can consume a [`FaceAnalysis`] without blocking on inference.
+
+pub mod client;
+pub mod error;
+pub mod protocol;
+
+pub use client::{FaceWorker, FaceWorkerConfig};
+pub use error::FaceWorkerError;
+pub use protocol::{WorkerFace, WorkerPose, WorkerResponse};
