@@ -96,6 +96,11 @@ pub struct App {
     pub verification_result: String,
     pub events: VecDeque<String>,
     pub face_quality: Option<FaceQualityAssessment>,
+    pub discovery_provider: String,
+    pub discovery_request_status: String,
+    pub discovery_raw_count: usize,
+    pub discovery_unique_count: usize,
+    pub discovery_error: Option<String>,
 }
 
 impl Default for App {
@@ -116,6 +121,11 @@ impl App {
             verification_result: "pending".to_string(),
             events: VecDeque::new(),
             face_quality: None,
+            discovery_provider: "external_reverse_image".to_string(),
+            discovery_request_status: "SENT".to_string(),
+            discovery_raw_count: 0,
+            discovery_unique_count: 0,
+            discovery_error: None,
         }
     }
 
@@ -123,6 +133,34 @@ impl App {
     pub fn set_face_quality(&mut self, quality: FaceQualityAssessment) {
         self.face_quality = Some(quality);
     }
+
+    /// Set discovery stage results.
+    pub fn set_discovery_results(
+        &mut self,
+        provider: impl Into<String>,
+        request_status: impl Into<String>,
+        raw_count: usize,
+        unique_count: usize,
+    ) {
+        self.discovery_provider = provider.into();
+        self.discovery_request_status = request_status.into();
+        self.discovery_raw_count = raw_count;
+        self.discovery_unique_count = unique_count;
+        self.candidate_count = unique_count;
+        self.discovery_error = None;
+    }
+
+    /// Set discovery stage search failure.
+    pub fn set_discovery_error(
+        &mut self,
+        provider: impl Into<String>,
+        error_message: impl Into<String>,
+    ) {
+        self.discovery_provider = provider.into();
+        self.discovery_request_status = "FAILED".to_string();
+        self.discovery_error = Some(error_message.into());
+    }
+
 
     /// Apply a user action, mutating state accordingly.
     pub fn apply(&mut self, action: AppAction) {
@@ -155,6 +193,11 @@ impl App {
             if next == Stage::Face && self.face_quality.is_none() {
                 self.face_quality = Some(FaceQualityAssessment::sample_good());
             }
+            if next == Stage::Discovery && self.discovery_raw_count == 0 && self.discovery_error.is_none() {
+                self.discovery_raw_count = 12;
+                self.discovery_unique_count = 8;
+                self.candidate_count = 8;
+            }
             self.push_event(&format!("Stage complete: {}", current.label()));
         } else {
             self.status = AppStatus::Completed;
@@ -184,6 +227,11 @@ impl App {
         self.verification_result = "pending".to_string();
         self.events.clear();
         self.face_quality = None;
+        self.discovery_provider = "external_reverse_image".to_string();
+        self.discovery_request_status = "SENT".to_string();
+        self.discovery_raw_count = 0;
+        self.discovery_unique_count = 0;
+        self.discovery_error = None;
         self.push_event("Pipeline reset");
     }
 

@@ -216,3 +216,85 @@ fn renders_face_quality_on_tall_terminal() {
     assert!(screen.contains("Status:"));
     assert!(screen.contains("GOOD"));
 }
+
+#[test]
+fn renders_discovery_stage_on_standard_terminal() {
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    app.apply(AppAction::Start);  // Stage::Input
+    app.apply(AppAction::Verify); // Stage::Face
+    app.apply(AppAction::Verify); // Stage::Discovery
+
+    assert_eq!(app.current, Some(Stage::Discovery));
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    // Verify all required DISCOVERY fields from the prompt
+    assert!(screen.contains("DISCOVERY"), "must show DISCOVERY header");
+    assert!(screen.contains("Provider:"), "must show Provider: label");
+    assert!(screen.contains("external_reverse_image"), "must show provider name");
+    assert!(screen.contains("Request:"), "must show Request: label");
+    assert!(screen.contains("SENT"), "must show SENT request status");
+    assert!(screen.contains("Candidates:"), "must show Candidates: label");
+    assert!(screen.contains("12"), "must show candidate count");
+    assert!(screen.contains("Unique:"), "must show Unique: label");
+    assert!(screen.contains("8"), "must show unique candidate count");
+}
+
+#[test]
+fn renders_discovery_stage_on_tall_terminal() {
+    let backend = TestBackend::new(80, 32);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    app.apply(AppAction::Start);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    assert!(screen.contains("DISCOVERY"));
+    assert!(screen.contains("Provider:"));
+    assert!(screen.contains("Request:"));
+    assert!(screen.contains("SENT"));
+    assert!(screen.contains("Candidates:"));
+    assert!(screen.contains("Unique:"));
+}
+
+#[test]
+fn renders_discovery_failure_clearly() {
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    app.apply(AppAction::Start);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+
+    app.set_discovery_error("google_lens", "Rate limit exceeded (HTTP 429): retry after 30s");
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    assert!(screen.contains("DISCOVERY"));
+    assert!(screen.contains("Provider:"));
+    assert!(screen.contains("google_lens"));
+    assert!(screen.contains("Request:"));
+    assert!(screen.contains("FAILED"), "must show FAILED request status");
+    assert!(screen.contains("SEARCH FAILURE:"), "must clearly show SEARCH FAILURE header");
+    assert!(
+        screen.contains("Rate limit exceeded"),
+        "must clearly display failure details"
+    );
+}
+

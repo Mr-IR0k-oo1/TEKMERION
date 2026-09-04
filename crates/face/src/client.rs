@@ -168,6 +168,7 @@ impl FaceWorker {
             detections,
             embeddings,
             timestamp: Utc::now(),
+            image_path: Some(path),
         })
     }
 

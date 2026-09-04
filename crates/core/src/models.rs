@@ -22,6 +22,24 @@ pub struct FaceAnalysis {
     pub detections: Vec<FaceDetection>,
     pub embeddings: Vec<FaceEmbedding>,
     pub timestamp: DateTime<Utc>,
+    #[serde(default)]
+    pub image_path: Option<String>,
+}
+
+impl FaceAnalysis {
+    pub fn new(detections: Vec<FaceDetection>, embeddings: Vec<FaceEmbedding>) -> Self {
+        Self {
+            detections,
+            embeddings,
+            timestamp: Utc::now(),
+            image_path: None,
+        }
+    }
+
+    pub fn with_image_path(mut self, path: impl Into<String>) -> Self {
+        self.image_path = Some(path.into());
+        self
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

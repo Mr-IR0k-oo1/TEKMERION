@@ -459,6 +459,7 @@ mod tests {
                     normalized: true,
                 }],
                 timestamp: chrono::Utc::now(),
+                image_path: None,
             })
         }
     }
@@ -645,6 +646,7 @@ mod tests {
                     detections: vec![],
                     embeddings: vec![],
                     timestamp: chrono::Utc::now(),
+                    image_path: None,
                 })
             }
         }
@@ -708,6 +710,7 @@ mod tests {
                         detections: vec![],
                         embeddings: vec![],
                         timestamp: chrono::Utc::now(),
+                        image_path: None,
                     })
                 }
             }

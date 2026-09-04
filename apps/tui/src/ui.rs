@@ -308,9 +308,145 @@ fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(block, area);
 }
 
+fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
+    let is_failure = app.discovery_error.is_some() || app.discovery_request_status == "FAILED";
+
+    let border_color = if is_failure {
+        Color::Red
+    } else {
+        Color::Cyan
+    };
+
+    let block = Block::default()
+        .title(Line::from(vec![
+            Span::styled(" ◈ ", Style::default().fg(border_color)),
+            Span::styled("DISCOVERY", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+        ]))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(border_color));
+
+    let inner = block.inner(area);
+
+    let key_style = Style::default().fg(Color::DarkGray);
+    let val_style = Style::default().fg(Color::White);
+
+    let req_style = if is_failure {
+        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+    };
+
+    if inner.height >= 14 {
+        // Taller viewports: single vertical layout with blank line separators
+        let mut lines = vec![
+            Line::from(Span::styled(
+                "DISCOVERY",
+                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(Span::styled("Provider:", key_style)),
+            Line::from(Span::styled(&app.discovery_provider, val_style)),
+            Line::from(""),
+            Line::from(Span::styled("Request:", key_style)),
+            Line::from(Span::styled(&app.discovery_request_status, req_style)),
+            Line::from(""),
+            Line::from(Span::styled("Candidates:", key_style)),
+            Line::from(Span::styled(format!("{}", app.discovery_raw_count), val_style)),
+            Line::from(""),
+            Line::from(Span::styled("Unique:", key_style)),
+            Line::from(Span::styled(format!("{}", app.discovery_unique_count), val_style)),
+        ];
+
+        if let Some(err) = &app.discovery_error {
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "SEARCH FAILURE:",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(Span::styled(
+                err.as_str(),
+                Style::default().fg(Color::LightRed),
+            )));
+        }
+
+        frame.render_widget(Paragraph::new(lines), inner);
+    } else if let Some(err) = &app.discovery_error {
+        // Standard viewports with failure: two-column metrics + prominent failure banner
+        let rows = Layout::vertical([
+            Constraint::Length(5), // Discovery metrics
+            Constraint::Fill(1),   // Failure banner
+        ])
+        .split(inner);
+
+        let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(rows[0]);
+
+        let left_lines = vec![
+            Line::from(Span::styled(
+                "DISCOVERY",
+                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(Span::styled("Provider:", key_style)),
+            Line::from(Span::styled(&app.discovery_provider, val_style)),
+            Line::from(Span::styled("Request:", key_style)),
+            Line::from(Span::styled(&app.discovery_request_status, req_style)),
+        ];
+
+        let right_lines = vec![
+            Line::from(""),
+            Line::from(Span::styled("Candidates:", key_style)),
+            Line::from(Span::styled(format!("{}", app.discovery_raw_count), val_style)),
+            Line::from(Span::styled("Unique:", key_style)),
+            Line::from(Span::styled(format!("{}", app.discovery_unique_count), val_style)),
+        ];
+
+        let err_lines = vec![
+            Line::from(Span::styled(
+                "SEARCH FAILURE:",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(Span::styled(
+                err.as_str(),
+                Style::default().fg(Color::LightRed),
+            )),
+        ];
+
+        frame.render_widget(Paragraph::new(left_lines), cols[0]);
+        frame.render_widget(Paragraph::new(right_lines), cols[1]);
+        frame.render_widget(Paragraph::new(err_lines), rows[1]);
+    } else {
+        // Standard viewports without failure: clean vertical layout matching prompt format
+        let lines = vec![
+            Line::from(Span::styled(
+                "DISCOVERY",
+                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(Span::styled("Provider:", key_style)),
+            Line::from(Span::styled(&app.discovery_provider, val_style)),
+            Line::from(Span::styled("Request:", key_style)),
+            Line::from(Span::styled(&app.discovery_request_status, req_style)),
+            Line::from(Span::styled("Candidates:", key_style)),
+            Line::from(Span::styled(format!("{}", app.discovery_raw_count), val_style)),
+            Line::from(Span::styled("Unique:", key_style)),
+            Line::from(Span::styled(format!("{}", app.discovery_unique_count), val_style)),
+        ];
+
+        frame.render_widget(Paragraph::new(lines), inner);
+    }
+
+    frame.render_widget(block, area);
+}
+
 fn render_detail(frame: &mut Frame, area: Rect, app: &App) {
     if app.current == Some(Stage::Face) {
         render_face_quality(frame, area, app);
+        return;
+    }
+
+    if app.current == Some(Stage::Discovery) {
+        render_discovery(frame, area, app);
         return;
     }
 
