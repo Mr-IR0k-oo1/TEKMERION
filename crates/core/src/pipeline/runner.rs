@@ -509,11 +509,19 @@ mod tests {
         ) -> Result<EvidenceBundle, PipelineError> {
             Ok(EvidenceBundle {
                 record: EvidenceRecord {
+                    schema_version: "1.0.0".to_string(),
+                    run_id: "test-run".to_string(),
                     source_url: matched.candidate.url,
+                    domain: matched.candidate.domain,
+                    platform: "web".to_string(),
                     provider: matched.candidate.provider,
-                    timestamp: chrono::Utc::now(),
-                    content_hash: "abc".to_string(),
+                    retrieved_at: chrono::Utc::now(),
+                    title: matched.candidate.title.unwrap_or_default(),
+                    text: matched.candidate.snippet.unwrap_or_default(),
+                    image_sha256: matched.candidate_image_hash.unwrap_or_default(),
                     face_similarity: matched.similarity,
+                    face_model: "test-model".to_string(),
+                    candidate_quality: matched.quality,
                 },
                 root_hash: "root".to_string(),
                 leaf_hashes: vec!["leaf".to_string()],

@@ -154,13 +154,21 @@ impl VerificationStatus {
 }
 
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvidenceRecord {
+    pub schema_version: String,
+    pub run_id: String,
     pub source_url: Url,
+    pub domain: String,
+    pub platform: String,
     pub provider: String,
-    pub timestamp: DateTime<Utc>,
-    pub content_hash: String,
+    pub retrieved_at: DateTime<Utc>,
+    pub title: String,
+    pub text: String,
+    pub image_sha256: String,
     pub face_similarity: f32,
+    pub face_model: String,
+    pub candidate_quality: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
