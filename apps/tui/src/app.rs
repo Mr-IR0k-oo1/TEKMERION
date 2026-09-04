@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 
 use tekmerion_core::PipelineState;
+use tekmerion_face::FaceQualityAssessment;
 
 use crate::input::{AppAction, Direction};
 
@@ -94,6 +95,7 @@ pub struct App {
     pub tx_hash: String,
     pub verification_result: String,
     pub events: VecDeque<String>,
+    pub face_quality: Option<FaceQualityAssessment>,
 }
 
 impl Default for App {
@@ -113,7 +115,13 @@ impl App {
             tx_hash: "--".to_string(),
             verification_result: "pending".to_string(),
             events: VecDeque::new(),
+            face_quality: None,
         }
+    }
+
+    /// Set or update the face quality assessment.
+    pub fn set_face_quality(&mut self, quality: FaceQualityAssessment) {
+        self.face_quality = Some(quality);
     }
 
     /// Apply a user action, mutating state accordingly.
@@ -144,6 +152,9 @@ impl App {
         };
         if let Some(next) = current.next() {
             self.current = Some(next);
+            if next == Stage::Face && self.face_quality.is_none() {
+                self.face_quality = Some(FaceQualityAssessment::sample_good());
+            }
             self.push_event(&format!("Stage complete: {}", current.label()));
         } else {
             self.status = AppStatus::Completed;
@@ -172,6 +183,7 @@ impl App {
         self.tx_hash = "--".to_string();
         self.verification_result = "pending".to_string();
         self.events.clear();
+        self.face_quality = None;
         self.push_event("Pipeline reset");
     }
 

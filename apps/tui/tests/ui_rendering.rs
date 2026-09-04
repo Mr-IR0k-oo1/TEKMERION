@@ -158,3 +158,61 @@ fn handles_small_terminal_gracefully() {
         "must display size warning on small terminal"
     );
 }
+
+#[test]
+fn renders_face_quality_on_face_stage() {
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    app.apply(AppAction::Start); // Stage::Input
+    app.apply(AppAction::Verify); // Stage::Face
+
+    assert_eq!(app.current, Some(Stage::Face));
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    // Verify all required FACE QUALITY fields from the prompt
+    assert!(screen.contains("FACE QUALITY"), "must show FACE QUALITY header");
+    assert!(screen.contains("Faces:"), "must show Faces: label");
+    assert!(screen.contains("1"), "must show face count 1");
+    assert!(screen.contains("Resolution:"), "must show Resolution: label");
+    assert!(screen.contains("1920x1080"), "must show image resolution");
+    assert!(screen.contains("Blur:"), "must show Blur: label");
+    assert!(screen.contains("LOW"), "must show LOW blur");
+    assert!(screen.contains("Pose:"), "must show Pose: label");
+    assert!(screen.contains("Quality:"), "must show Quality: label");
+    assert!(screen.contains("0.91"), "must show quality score 0.91");
+    assert!(screen.contains("Status:"), "must show Status: label");
+    assert!(screen.contains("GOOD"), "must show GOOD status");
+}
+
+#[test]
+fn renders_face_quality_on_tall_terminal() {
+    let backend = TestBackend::new(80, 32);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    app.apply(AppAction::Start);
+    app.apply(AppAction::Verify);
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    assert!(screen.contains("FACE QUALITY"));
+    assert!(screen.contains("Faces:"));
+    assert!(screen.contains("1"));
+    assert!(screen.contains("Resolution:"));
+    assert!(screen.contains("Blur:"));
+    assert!(screen.contains("LOW"));
+    assert!(screen.contains("Pose:"));
+    assert!(screen.contains("Quality:"));
+    assert!(screen.contains("0.91"));
+    assert!(screen.contains("Status:"));
+    assert!(screen.contains("GOOD"));
+}

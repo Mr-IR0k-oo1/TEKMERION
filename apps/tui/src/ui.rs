@@ -6,6 +6,8 @@ use ratatui::{
     Frame,
 };
 
+use tekmerion_face::{BlurLevel, FaceQualityAssessment, QualityStatus};
+
 use crate::app::{App, AppStatus, Stage};
 
 /// Render the whole interface into a single frame.
@@ -183,7 +185,135 @@ fn stage_marker(idx: usize, stage: Stage, app: &App) -> (Span<'static>, Style) {
     }
 }
 
+fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
+    let quality = app
+        .face_quality
+        .as_ref()
+        .cloned()
+        .unwrap_or_else(FaceQualityAssessment::sample_good);
+
+    let status_style = match quality.status {
+        QualityStatus::Good => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+        QualityStatus::Warning => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        QualityStatus::Reject => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    };
+
+    let blur_style = match quality.blur.level {
+        BlurLevel::Low => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+        BlurLevel::Medium => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        BlurLevel::High => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+    };
+
+    let quality_style = if quality.overall_quality >= 0.75 {
+        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+    } else if quality.overall_quality >= 0.50 {
+        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+    };
+
+    let key_style = Style::default().fg(Color::DarkGray);
+    let val_style = Style::default().fg(Color::White);
+
+    let block = Block::default()
+        .title(Line::from(vec![
+            Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
+            Span::styled("FACE QUALITY", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+        ]))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(area);
+
+    if inner.height >= 19 {
+        // Taller viewports: single vertical layout with blank line separators
+        let lines = vec![
+            Line::from(Span::styled(
+                "FACE QUALITY",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(""),
+            Line::from(Span::styled("Faces:", key_style)),
+            Line::from(Span::styled(quality.faces_display(), val_style)),
+            Line::from(""),
+            Line::from(Span::styled("Resolution:", key_style)),
+            Line::from(Span::styled(quality.resolution_display(), val_style)),
+            Line::from(""),
+            Line::from(Span::styled("Blur:", key_style)),
+            Line::from(Span::styled(quality.blur_display(), blur_style)),
+            Line::from(""),
+            Line::from(Span::styled("Pose:", key_style)),
+            Line::from(Span::styled(quality.pose_display(), val_style)),
+            Line::from(""),
+            Line::from(Span::styled("Quality:", key_style)),
+            Line::from(Span::styled(quality.quality_display(), quality_style)),
+            Line::from(""),
+            Line::from(Span::styled("Status:", key_style)),
+            Line::from(Span::styled(quality.status_display(), status_style)),
+        ];
+        frame.render_widget(Paragraph::new(lines), inner);
+    } else {
+        // Standard viewports (e.g. 80x24): two-column layout to prevent clipping
+        let rows = Layout::vertical([
+            Constraint::Length(1), // Header
+            Constraint::Fill(1),   // Fields
+        ])
+        .split(inner);
+
+        let header = Paragraph::new(Line::from(Span::styled(
+            "FACE QUALITY",
+            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        )));
+        frame.render_widget(header, rows[0]);
+
+        let cols = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(rows[1]);
+
+        let spaced = rows[1].height >= 8;
+
+        let mut left_lines = Vec::new();
+        left_lines.push(Line::from(Span::styled("Faces:", key_style)));
+        left_lines.push(Line::from(Span::styled(quality.faces_display(), val_style)));
+        if spaced {
+            left_lines.push(Line::from(""));
+        }
+        left_lines.push(Line::from(Span::styled("Resolution:", key_style)));
+        left_lines.push(Line::from(Span::styled(quality.resolution_display(), val_style)));
+        if spaced {
+            left_lines.push(Line::from(""));
+        }
+        left_lines.push(Line::from(Span::styled("Blur:", key_style)));
+        left_lines.push(Line::from(Span::styled(quality.blur_display(), blur_style)));
+
+        let mut right_lines = Vec::new();
+        right_lines.push(Line::from(Span::styled("Pose:", key_style)));
+        right_lines.push(Line::from(Span::styled(quality.pose_display(), val_style)));
+        if spaced {
+            right_lines.push(Line::from(""));
+        }
+        right_lines.push(Line::from(Span::styled("Quality:", key_style)));
+        right_lines.push(Line::from(Span::styled(quality.quality_display(), quality_style)));
+        if spaced {
+            right_lines.push(Line::from(""));
+        }
+        right_lines.push(Line::from(Span::styled("Status:", key_style)));
+        right_lines.push(Line::from(Span::styled(quality.status_display(), status_style)));
+
+        frame.render_widget(Paragraph::new(left_lines), cols[0]);
+        frame.render_widget(Paragraph::new(right_lines), cols[1]);
+    }
+
+    frame.render_widget(block, area);
+}
+
 fn render_detail(frame: &mut Frame, area: Rect, app: &App) {
+    if app.current == Some(Stage::Face) {
+        render_face_quality(frame, area, app);
+        return;
+    }
+
     let (status_badge, status_style) = match app.status {
         AppStatus::Idle => (
             " IDLE ",

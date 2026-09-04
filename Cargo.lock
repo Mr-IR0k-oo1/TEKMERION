@@ -1645,6 +1645,7 @@ dependencies = [
  "crossterm",
  "ratatui",
  "tekmerion-core",
+ "tekmerion-face",
 ]
 
 [[package]]
