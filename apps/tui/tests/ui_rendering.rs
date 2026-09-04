@@ -298,3 +298,101 @@ fn renders_discovery_failure_clearly() {
     );
 }
 
+#[test]
+fn renders_candidate_verification_stage_on_standard_terminal() {
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    // Advance to Stage::Verify: Start -> Input, Verify -> Face, Verify -> Discovery, Verify -> Verify
+    app.apply(AppAction::Start);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    // Verify header and candidate verification pane
+    assert!(screen.contains("CANDIDATE VERIFICATION"));
+    assert!(screen.contains("Candidates:"));
+    assert!(screen.contains("Verified:"));
+    assert!(screen.contains("Threshold:"));
+
+    // Verify all 4 required statuses appear in the candidate list
+    assert!(screen.contains("VERIFIED"));
+    assert!(screen.contains("BELOW THRESHOLD"));
+    assert!(screen.contains("NO FACE"));
+    assert!(screen.contains("ERROR"));
+
+    // Verify candidate details and preserved fields
+    assert!(screen.contains("Sim:"));
+    assert!(screen.contains("Face #"));
+    assert!(screen.contains("Selected Candidate #1"));
+    assert!(screen.contains("7a9f82c4e1d3b5a6"));
+
+    // CRITICAL REQUIREMENT: Do not use the word "identity confirmed" anywhere
+    assert!(
+        !screen.to_lowercase().contains("identity confirmed"),
+        "forbidden phrasing 'identity confirmed' must never appear in TUI"
+    );
+}
+
+#[test]
+fn renders_candidate_verification_selection_navigation() {
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    app.apply(AppAction::Start);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+
+    // Navigate to Candidate #2
+    app.apply(AppAction::Select(tekmerion_tui::input::Direction::Down));
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    assert!(screen.contains("Selected Candidate #2"));
+    assert!(screen.contains("archives.example.net"));
+    assert!(screen.contains("1b2c3d4e5f6a7b8c"));
+    assert!(screen.contains("BELOW THRESHOLD"));
+
+    // CRITICAL REQUIREMENT
+    assert!(
+        !screen.to_lowercase().contains("identity confirmed"),
+        "forbidden phrasing 'identity confirmed' must never appear in TUI"
+    );
+}
+
+#[test]
+fn renders_candidate_verification_stage_on_tall_terminal() {
+    let backend = TestBackend::new(100, 35);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    app.apply(AppAction::Start);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    assert!(screen.contains("CANDIDATE VERIFICATION"));
+    assert!(screen.contains("VERIFIED"));
+    assert!(screen.contains("BELOW THRESHOLD"));
+    assert!(screen.contains("NO FACE"));
+    assert!(screen.contains("ERROR"));
+    assert!(screen.contains("7a9f82c4e1d3b5a6"));
+    assert!(!screen.to_lowercase().contains("identity confirmed"));
+}
+

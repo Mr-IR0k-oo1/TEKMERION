@@ -10,3 +10,5 @@ tekmerion-face = { path = "../../crates/face" }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
+url = { workspace = true }

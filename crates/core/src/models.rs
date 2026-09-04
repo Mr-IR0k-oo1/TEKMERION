@@ -89,15 +89,70 @@ impl SearchCandidate {
 pub struct VerificationResult {
     pub candidate: SearchCandidate,
     pub similarity: f32,
+    pub quality: f32,
+    pub matched_face_index: Option<usize>,
+    pub candidate_image_hash: Option<String>,
     pub status: VerificationStatus,
+    #[serde(default)]
+    pub error_message: Option<String>,
+}
+
+impl VerificationResult {
+    pub fn new(
+        candidate: SearchCandidate,
+        similarity: f32,
+        quality: f32,
+        matched_face_index: Option<usize>,
+        candidate_image_hash: Option<String>,
+        status: VerificationStatus,
+    ) -> Self {
+        Self {
+            candidate,
+            similarity,
+            quality,
+            matched_face_index,
+            candidate_image_hash,
+            status,
+            error_message: None,
+        }
+    }
+
+    pub fn with_error(candidate: SearchCandidate, error_message: impl Into<String>) -> Self {
+        Self {
+            candidate,
+            similarity: 0.0,
+            quality: 0.0,
+            matched_face_index: None,
+            candidate_image_hash: None,
+            status: VerificationStatus::Error,
+            error_message: Some(error_message.into()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VerificationStatus {
-    Match,
-    Review,
-    Reject,
+    NoFace,
+    Verified,
+    BelowThreshold,
+    Error,
 }
+
+impl VerificationStatus {
+    pub fn label(self) -> &'static str {
+        match self {
+            VerificationStatus::NoFace => "No Face",
+            VerificationStatus::Verified => "Verified",
+            VerificationStatus::BelowThreshold => "Below Threshold",
+            VerificationStatus::Error => "Error",
+        }
+    }
+
+    pub fn is_verified(self) -> bool {
+        matches!(self, VerificationStatus::Verified)
+    }
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EvidenceRecord {
@@ -158,7 +213,11 @@ mod tests {
 
     #[test]
     fn verification_status_variants() {
-        assert_ne!(VerificationStatus::Match, VerificationStatus::Reject);
-        assert_eq!(VerificationStatus::Review, VerificationStatus::Review);
+        assert_ne!(VerificationStatus::Verified, VerificationStatus::BelowThreshold);
+        assert_eq!(VerificationStatus::NoFace, VerificationStatus::NoFace);
+        assert_eq!(VerificationStatus::Verified.label(), "Verified");
+        assert!(VerificationStatus::Verified.is_verified());
+        assert!(!VerificationStatus::BelowThreshold.is_verified());
     }
 }
+

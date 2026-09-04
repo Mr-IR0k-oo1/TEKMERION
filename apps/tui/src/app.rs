@@ -1,7 +1,8 @@
 use std::collections::VecDeque;
 
-use tekmerion_core::PipelineState;
+use tekmerion_core::{PipelineState, SearchCandidate, VerificationResult, VerificationStatus};
 use tekmerion_face::FaceQualityAssessment;
+use url::Url;
 
 use crate::input::{AppAction, Direction};
 
@@ -101,6 +102,7 @@ pub struct App {
     pub discovery_raw_count: usize,
     pub discovery_unique_count: usize,
     pub discovery_error: Option<String>,
+    pub verified_candidates: Vec<VerificationResult>,
 }
 
 impl Default for App {
@@ -126,8 +128,88 @@ impl App {
             discovery_raw_count: 0,
             discovery_unique_count: 0,
             discovery_error: None,
+            verified_candidates: Vec::new(),
         }
     }
+
+    /// Sample verified candidates covering all candidate verification statuses.
+    pub fn sample_verified_candidates() -> Vec<VerificationResult> {
+        vec![
+            VerificationResult {
+                candidate: SearchCandidate {
+                    url: Url::parse("https://profiles.example.org/janedoe").unwrap(),
+                    title: Some("Jane Doe Public Portfolio".to_string()),
+                    domain: "profiles.example.org".to_string(),
+                    image_url: Some(Url::parse("https://profiles.example.org/face.jpg").unwrap()),
+                    thumbnail_url: None,
+                    snippet: Some("Software engineer portrait".to_string()),
+                    provider: "external_reverse_image".to_string(),
+                    discovered_at: chrono::Utc::now(),
+                },
+                similarity: 0.94,
+                quality: 0.92,
+                matched_face_index: Some(0),
+                candidate_image_hash: Some("7a9f82c4e1d3b5a6".to_string()),
+                status: VerificationStatus::Verified,
+                error_message: None,
+            },
+            VerificationResult {
+                candidate: SearchCandidate {
+                    url: Url::parse("https://archives.example.net/events/2024").unwrap(),
+                    title: Some("Conference Attendees".to_string()),
+                    domain: "archives.example.net".to_string(),
+                    image_url: Some(Url::parse("https://archives.example.net/c2.jpg").unwrap()),
+                    thumbnail_url: None,
+                    snippet: Some("Group session photo".to_string()),
+                    provider: "external_reverse_image".to_string(),
+                    discovered_at: chrono::Utc::now(),
+                },
+                similarity: 0.58,
+                quality: 0.81,
+                matched_face_index: Some(1),
+                candidate_image_hash: Some("1b2c3d4e5f6a7b8c".to_string()),
+                status: VerificationStatus::BelowThreshold,
+                error_message: None,
+            },
+            VerificationResult {
+                candidate: SearchCandidate {
+                    url: Url::parse("https://landscapes.example.com/gallery").unwrap(),
+                    title: Some("Scenic View".to_string()),
+                    domain: "landscapes.example.com".to_string(),
+                    image_url: Some(Url::parse("https://landscapes.example.com/mountain.jpg").unwrap()),
+                    thumbnail_url: None,
+                    snippet: Some("Mountain horizon".to_string()),
+                    provider: "external_reverse_image".to_string(),
+                    discovered_at: chrono::Utc::now(),
+                },
+                similarity: 0.0,
+                quality: 0.0,
+                matched_face_index: None,
+                candidate_image_hash: Some("3d4e5f6a7b8c9d0e".to_string()),
+                status: VerificationStatus::NoFace,
+                error_message: None,
+            },
+            VerificationResult {
+                candidate: SearchCandidate {
+                    url: Url::parse("https://corrupt.example.org/missing").unwrap(),
+                    title: Some("Unreachable Media".to_string()),
+                    domain: "corrupt.example.org".to_string(),
+                    image_url: Some(Url::parse("https://corrupt.example.org/img.png").unwrap()),
+                    thumbnail_url: None,
+                    snippet: None,
+                    provider: "external_reverse_image".to_string(),
+                    discovered_at: chrono::Utc::now(),
+                },
+                similarity: 0.0,
+                quality: 0.0,
+                matched_face_index: None,
+                candidate_image_hash: None,
+                status: VerificationStatus::Error,
+                error_message: Some("HTTP 404: Not Found".to_string()),
+            },
+        ]
+    }
+
 
     /// Set or update the face quality assessment.
     pub fn set_face_quality(&mut self, quality: FaceQualityAssessment) {
@@ -198,6 +280,10 @@ impl App {
                 self.discovery_unique_count = 8;
                 self.candidate_count = 8;
             }
+            if next == Stage::Verify && self.verified_candidates.is_empty() {
+                self.verified_candidates = Self::sample_verified_candidates();
+                self.candidate_count = self.verified_candidates.len();
+            }
             self.push_event(&format!("Stage complete: {}", current.label()));
         } else {
             self.status = AppStatus::Completed;
@@ -205,6 +291,17 @@ impl App {
             self.verification_result = "verified".to_string();
             self.push_event("Pipeline verified");
         }
+    }
+
+    /// Set verified candidate results.
+    pub fn set_verified_candidates(&mut self, results: Vec<VerificationResult>) {
+        self.candidate_count = results.len();
+        if self.selected_candidate >= self.candidate_count && self.candidate_count > 0 {
+            self.selected_candidate = self.candidate_count - 1;
+        } else if self.candidate_count == 0 {
+            self.selected_candidate = 0;
+        }
+        self.verified_candidates = results;
     }
 
     fn tamper(&mut self) {
@@ -232,6 +329,7 @@ impl App {
         self.discovery_raw_count = 0;
         self.discovery_unique_count = 0;
         self.discovery_error = None;
+        self.verified_candidates.clear();
         self.push_event("Pipeline reset");
     }
 

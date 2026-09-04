@@ -11,9 +11,17 @@
 pub const DESCRIPTION: &str = "similarity verification of candidates";
 
 pub mod downloader;
+pub mod similarity;
+pub mod verifier;
 
 pub use downloader::{
     validate_magic_bytes, DownloadError, DownloadedImage, DownloaderConfig, ImageDownloader,
     DEFAULT_MAX_DOWNLOAD_BYTES, DEFAULT_TIMEOUT_SECONDS,
 };
+pub use similarity::{cosine_similarity, SimilarityError};
+pub use verifier::{
+    CandidateFaceVerifier, CandidateImageDownloader, CandidateVerifierConfig, FaceAnalysisClient,
+    DEFAULT_SIMILARITY_THRESHOLD,
+};
+
 

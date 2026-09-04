@@ -2043,21 +2043,26 @@ name = "tekmerion-tui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "crossterm",
  "ratatui",
  "tekmerion-core",
  "tekmerion-face",
+ "url",
 ]
 
 [[package]]
 name = "tekmerion-verification"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chrono",
  "futures-util",
  "hex",
  "reqwest",
  "sha2",
  "tekmerion-core",
+ "tekmerion-face",
  "thiserror 2.0.20",
  "tokio",
  "tracing",

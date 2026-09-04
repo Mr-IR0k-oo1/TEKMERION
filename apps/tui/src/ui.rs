@@ -6,6 +6,7 @@ use ratatui::{
     Frame,
 };
 
+use tekmerion_core::VerificationStatus;
 use tekmerion_face::{BlurLevel, FaceQualityAssessment, QualityStatus};
 
 use crate::app::{App, AppStatus, Stage};
@@ -439,6 +440,275 @@ fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
     frame.render_widget(block, area);
 }
 
+fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .title(Line::from(vec![
+            Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
+            Span::styled("CANDIDATE VERIFICATION", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" "),
+        ]))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let inner = block.inner(area);
+
+    if app.verified_candidates.is_empty() {
+        let placeholder = Paragraph::new(vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "  No candidates verified yet.",
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+            )),
+            Line::from(Span::styled(
+                "  Advance through pipeline stages or press [V] to verify candidates.",
+                Style::default().fg(Color::DarkGray),
+            )),
+        ]);
+        frame.render_widget(placeholder, inner);
+        frame.render_widget(block, area);
+        return;
+    }
+
+    let selected_idx = app
+        .selected_candidate
+        .min(app.verified_candidates.len().saturating_sub(1));
+
+    if inner.height >= 9 {
+        let detail_height = if inner.height >= 10 { 5 } else { 4 };
+        let rows = Layout::vertical([
+            Constraint::Length(1),             // summary header
+            Constraint::Fill(1),               // candidate list
+            Constraint::Length(detail_height), // selected candidate detail box
+        ])
+        .split(inner);
+
+        // 1. Summary Header
+        let verified_count = app
+            .verified_candidates
+            .iter()
+            .filter(|c| c.status == VerificationStatus::Verified)
+            .count();
+        let total_count = app.verified_candidates.len();
+        let summary_line = Line::from(vec![
+            Span::styled(" Candidates: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{total_count}"),
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  │  Verified: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                format!("{verified_count}"),
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("  │  Threshold: ", Style::default().fg(Color::DarkGray)),
+            Span::styled("≥ 0.75", Style::default().fg(Color::Cyan)),
+            Span::styled("  │  Use ", Style::default().fg(Color::DarkGray)),
+            Span::styled("↑/↓", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(" to inspect", Style::default().fg(Color::DarkGray)),
+        ]);
+        frame.render_widget(Paragraph::new(summary_line), rows[0]);
+
+        // 2. Candidate List
+        let list_lines: Vec<Line> = app
+            .verified_candidates
+            .iter()
+            .enumerate()
+            .map(|(idx, cand)| {
+                let is_selected = idx == selected_idx;
+                let cursor = if is_selected {
+                    Span::styled("▶ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                } else {
+                    Span::raw("  ")
+                };
+
+                let num = Span::styled(
+                    format!("[{}] ", idx + 1),
+                    if is_selected {
+                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::DarkGray)
+                    },
+                );
+
+                let (status_text, status_style) = match cand.status {
+                    VerificationStatus::Verified => (
+                        "VERIFIED",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    VerificationStatus::BelowThreshold => (
+                        "BELOW THRESHOLD",
+                        Style::default()
+                            .fg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    VerificationStatus::NoFace => (
+                        "NO FACE",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    VerificationStatus::Error => (
+                        "ERROR",
+                        Style::default()
+                            .fg(Color::Red)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                };
+
+                let metrics = match cand.status {
+                    VerificationStatus::Verified | VerificationStatus::BelowThreshold => {
+                        let face_str = cand
+                            .matched_face_index
+                            .map(|f| format!("Face #{f}"))
+                            .unwrap_or_else(|| "Face --".to_string());
+                        format!("Sim: {:.2}  {}", cand.similarity, face_str)
+                    }
+                    VerificationStatus::NoFace => "No face detected".to_string(),
+                    VerificationStatus::Error => {
+                        cand.error_message.as_deref().unwrap_or("Failed").to_string()
+                    }
+                };
+                let metrics_span = Span::styled(
+                    metrics,
+                    if is_selected {
+                        Style::default().fg(Color::White)
+                    } else {
+                        Style::default().fg(Color::Gray)
+                    },
+                );
+
+                Line::from(vec![
+                    cursor,
+                    num,
+                    Span::styled(format!("{:<16}", status_text), status_style),
+                    metrics_span,
+                ])
+            })
+            .collect();
+
+        frame.render_widget(Paragraph::new(list_lines), rows[1]);
+
+        // 3. Selected Detail Box
+        let selected_cand = &app.verified_candidates[selected_idx];
+        let detail_block = Block::default()
+            .borders(Borders::TOP)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::DarkGray))
+            .title(Line::from(vec![
+                Span::styled(" Selected Candidate #", Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    format!("{}", selected_idx + 1),
+                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" "),
+            ]));
+
+        let key_style = Style::default().fg(Color::DarkGray);
+        let val_style = Style::default().fg(Color::White);
+
+        let hash_str = selected_cand
+            .candidate_image_hash
+            .as_deref()
+            .unwrap_or("--");
+        let hash_display = if hash_str.len() > 24 {
+            &hash_str[..24]
+        } else {
+            hash_str
+        };
+
+        let status_style = match selected_cand.status {
+            VerificationStatus::Verified => {
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+            }
+            VerificationStatus::BelowThreshold => {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            }
+            VerificationStatus::NoFace => {
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            }
+            VerificationStatus::Error => {
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+            }
+        };
+
+        let face_str = selected_cand
+            .matched_face_index
+            .map(|i| format!("Face #{i}"))
+            .unwrap_or_else(|| "None".to_string());
+
+        let mut detail_lines = vec![
+            Line::from(vec![
+                Span::styled("URL:         ", key_style),
+                Span::styled(selected_cand.candidate.url.as_str(), val_style),
+            ]),
+            Line::from(vec![
+                Span::styled("Status:      ", key_style),
+                Span::styled(format!("{:<16}", selected_cand.status.label()), status_style),
+                Span::styled("Sim: ", key_style),
+                Span::styled(format!("{:.4}", selected_cand.similarity), val_style),
+            ]),
+            Line::from(vec![
+                Span::styled("Matched:     ", key_style),
+                Span::styled(format!("{:<16}", face_str), val_style),
+                Span::styled("Quality: ", key_style),
+                Span::styled(format!("{:.2}", selected_cand.quality), val_style),
+            ]),
+            Line::from(vec![
+                Span::styled("Image Hash:  ", key_style),
+                Span::styled(hash_display, Style::default().fg(Color::Cyan)),
+            ]),
+        ];
+
+        if let Some(err) = &selected_cand.error_message {
+            detail_lines.push(Line::from(vec![
+                Span::styled("Error:       ", key_style),
+                Span::styled(err.as_str(), Style::default().fg(Color::LightRed)),
+            ]));
+        }
+
+        let detail_inner = detail_block.inner(rows[2]);
+        frame.render_widget(detail_block, rows[2]);
+        frame.render_widget(Paragraph::new(detail_lines), detail_inner);
+    } else {
+        // Compact view for small terminals
+        let list_lines: Vec<Line> = app
+            .verified_candidates
+            .iter()
+            .enumerate()
+            .map(|(idx, cand)| {
+                let is_selected = idx == selected_idx;
+                let cursor = if is_selected { "▶ " } else { "  " };
+                let (status_str, status_color) = match cand.status {
+                    VerificationStatus::Verified => ("VERIFIED", Color::Green),
+                    VerificationStatus::BelowThreshold => ("BELOW THRESHOLD", Color::Yellow),
+                    VerificationStatus::NoFace => ("NO FACE", Color::DarkGray),
+                    VerificationStatus::Error => ("ERROR", Color::Red),
+                };
+
+                Line::from(vec![
+                    Span::styled(cursor, Style::default().fg(Color::Yellow)),
+                    Span::styled(format!("[{}] ", idx + 1), Style::default().fg(Color::White)),
+                    Span::styled(
+                        format!("{:<15}", status_str),
+                        Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("Sim: {:.2}  Q: {:.2}", cand.similarity, cand.quality),
+                        Style::default().fg(Color::Gray),
+                    ),
+                ])
+            })
+            .collect();
+
+        frame.render_widget(Paragraph::new(list_lines), inner);
+    }
+
+    frame.render_widget(block, area);
+}
+
 fn render_detail(frame: &mut Frame, area: Rect, app: &App) {
     if app.current == Some(Stage::Face) {
         render_face_quality(frame, area, app);
@@ -447,6 +717,11 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App) {
 
     if app.current == Some(Stage::Discovery) {
         render_discovery(frame, area, app);
+        return;
+    }
+
+    if app.current == Some(Stage::Verify) {
+        render_candidate_verification(frame, area, app);
         return;
     }
 

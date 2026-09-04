@@ -489,7 +489,11 @@ mod tests {
                 .map(|candidate| VerificationResult {
                     candidate,
                     similarity: 0.9,
-                    status: VerificationStatus::Match,
+                    quality: 0.95,
+                    matched_face_index: Some(0),
+                    candidate_image_hash: Some("mock_hash".to_string()),
+                    status: VerificationStatus::Verified,
+                    error_message: None,
                 })
                 .collect())
         }
@@ -741,12 +745,20 @@ mod tests {
             VerificationResult {
                 candidate: candidate(),
                 similarity: 0.4,
-                status: VerificationStatus::Reject,
+                quality: 0.85,
+                matched_face_index: Some(0),
+                candidate_image_hash: Some("h1".to_string()),
+                status: VerificationStatus::BelowThreshold,
+                error_message: None,
             },
             VerificationResult {
                 candidate: candidate(),
                 similarity: 0.95,
-                status: VerificationStatus::Match,
+                quality: 0.90,
+                matched_face_index: Some(0),
+                candidate_image_hash: Some("h2".to_string()),
+                status: VerificationStatus::Verified,
+                error_message: None,
             },
         ];
         let best = runner.select_best(results).await.unwrap();
