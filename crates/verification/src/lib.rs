@@ -9,3 +9,11 @@
 
 /// Human-friendly description of the crate's planned responsibility.
 pub const DESCRIPTION: &str = "similarity verification of candidates";
+
+pub mod downloader;
+
+pub use downloader::{
+    validate_magic_bytes, DownloadError, DownloadedImage, DownloaderConfig, ImageDownloader,
+    DEFAULT_MAX_DOWNLOAD_BYTES, DEFAULT_TIMEOUT_SECONDS,
+};
+
