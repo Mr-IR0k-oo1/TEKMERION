@@ -2048,6 +2048,7 @@ dependencies = [
  "ratatui",
  "tekmerion-core",
  "tekmerion-face",
+ "tekmerion-verification",
  "url",
 ]
 
@@ -2060,6 +2061,7 @@ dependencies = [
  "futures-util",
  "hex",
  "reqwest",
+ "serde",
  "sha2",
  "tekmerion-core",
  "tekmerion-face",

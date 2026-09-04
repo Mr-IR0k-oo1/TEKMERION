@@ -12,3 +12,4 @@ crossterm = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 url = { workspace = true }
+tekmerion-verification = { path = "../../crates/verification" }

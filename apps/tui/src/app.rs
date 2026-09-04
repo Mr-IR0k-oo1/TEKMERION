@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use tekmerion_core::{PipelineState, SearchCandidate, VerificationResult, VerificationStatus};
 use tekmerion_face::FaceQualityAssessment;
+use tekmerion_verification::{CandidateRanker, RankedCandidate};
 use url::Url;
 
 use crate::input::{AppAction, Direction};
@@ -103,6 +104,7 @@ pub struct App {
     pub discovery_unique_count: usize,
     pub discovery_error: Option<String>,
     pub verified_candidates: Vec<VerificationResult>,
+    pub ranked_candidates: Vec<RankedCandidate>,
 }
 
 impl Default for App {
@@ -129,6 +131,7 @@ impl App {
             discovery_unique_count: 0,
             discovery_error: None,
             verified_candidates: Vec::new(),
+            ranked_candidates: Vec::new(),
         }
     }
 
@@ -282,7 +285,9 @@ impl App {
             }
             if next == Stage::Verify && self.verified_candidates.is_empty() {
                 self.verified_candidates = Self::sample_verified_candidates();
-                self.candidate_count = self.verified_candidates.len();
+                self.ranked_candidates =
+                    CandidateRanker::new().rank_results(self.verified_candidates.clone());
+                self.candidate_count = self.ranked_candidates.len();
             }
             self.push_event(&format!("Stage complete: {}", current.label()));
         } else {
@@ -293,9 +298,10 @@ impl App {
         }
     }
 
-    /// Set verified candidate results.
+    /// Set verified candidate results and automatically rank them.
     pub fn set_verified_candidates(&mut self, results: Vec<VerificationResult>) {
-        self.candidate_count = results.len();
+        self.ranked_candidates = CandidateRanker::new().rank_results(results.clone());
+        self.candidate_count = self.ranked_candidates.len();
         if self.selected_candidate >= self.candidate_count && self.candidate_count > 0 {
             self.selected_candidate = self.candidate_count - 1;
         } else if self.candidate_count == 0 {
@@ -330,6 +336,7 @@ impl App {
         self.discovery_unique_count = 0;
         self.discovery_error = None;
         self.verified_candidates.clear();
+        self.ranked_candidates.clear();
         self.push_event("Pipeline reset");
     }
 

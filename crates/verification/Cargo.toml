@@ -17,6 +17,7 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 tekmerion-face = { path = "../face" }
 chrono = { workspace = true }
+serde = { workspace = true }
 
 
 

@@ -8,6 +8,7 @@ use ratatui::{
 
 use tekmerion_core::VerificationStatus;
 use tekmerion_face::{BlurLevel, FaceQualityAssessment, QualityStatus};
+use tekmerion_verification::RankedCandidate;
 
 use crate::app::{App, AppStatus, Stage};
 
@@ -444,7 +445,7 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .title(Line::from(vec![
             Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
-            Span::styled("CANDIDATE VERIFICATION", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled("CANDIDATE VERIFICATION & RANKING", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" "),
         ]))
         .borders(Borders::ALL)
@@ -453,7 +454,15 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
 
     let inner = block.inner(area);
 
-    if app.verified_candidates.is_empty() {
+    let ranked_list: Vec<RankedCandidate> = if !app.ranked_candidates.is_empty() {
+        app.ranked_candidates.clone()
+    } else if !app.verified_candidates.is_empty() {
+        tekmerion_verification::CandidateRanker::new().rank_results(app.verified_candidates.clone())
+    } else {
+        Vec::new()
+    };
+
+    if ranked_list.is_empty() {
         let placeholder = Paragraph::new(vec![
             Line::from(""),
             Line::from(Span::styled(
@@ -472,24 +481,23 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
 
     let selected_idx = app
         .selected_candidate
-        .min(app.verified_candidates.len().saturating_sub(1));
+        .min(ranked_list.len().saturating_sub(1));
 
     if inner.height >= 9 {
-        let detail_height = if inner.height >= 10 { 5 } else { 4 };
+        let detail_height = if inner.height >= 11 { 5 } else { 4 };
         let rows = Layout::vertical([
             Constraint::Length(1),             // summary header
-            Constraint::Fill(1),               // candidate list
+            Constraint::Fill(1),               // candidate list with column headers
             Constraint::Length(detail_height), // selected candidate detail box
         ])
         .split(inner);
 
         // 1. Summary Header
-        let verified_count = app
-            .verified_candidates
+        let verified_count = ranked_list
             .iter()
-            .filter(|c| c.status == VerificationStatus::Verified)
+            .filter(|c| c.status() == VerificationStatus::Verified)
             .count();
-        let total_count = app.verified_candidates.len();
+        let total_count = ranked_list.len();
         let summary_line = Line::from(vec![
             Span::styled(" Candidates: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
@@ -509,90 +517,162 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
         ]);
         frame.render_widget(Paragraph::new(summary_line), rows[0]);
 
-        // 2. Candidate List
-        let list_lines: Vec<Line> = app
-            .verified_candidates
-            .iter()
-            .enumerate()
-            .map(|(idx, cand)| {
-                let is_selected = idx == selected_idx;
-                let cursor = if is_selected {
-                    Span::styled("▶ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        // 2. Candidate Table with explicit columns:
+        // RANK, SOURCE, SIMILARITY, QUALITY, SCORE, STATUS
+        let mut list_lines: Vec<Line> = Vec::new();
+
+        let col_header = Line::from(vec![
+            Span::raw("  "),
+            Span::styled(
+                "RANK ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "SOURCE   ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "SIMILARITY ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "QUALITY ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "SCORE  ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "STATUS",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]);
+        list_lines.push(col_header);
+
+        for (idx, cand) in ranked_list.iter().enumerate() {
+            let is_selected = idx == selected_idx;
+            let cursor = if is_selected {
+                Span::styled(
+                    "▶ ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
+            } else {
+                Span::raw("  ")
+            };
+
+            let rank_span = Span::styled(
+                format!("{:<4}", format!("#{}", cand.rank)),
+                if is_selected {
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD)
                 } else {
-                    Span::raw("  ")
-                };
+                    Style::default().fg(Color::DarkGray)
+                },
+            );
 
-                let num = Span::styled(
-                    format!("[{}] ", idx + 1),
-                    if is_selected {
-                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(Color::DarkGray)
-                    },
-                );
+            let domain = cand.source();
+            let domain_display = if domain.len() > 8 {
+                format!("{:<8}", &domain[..8])
+            } else {
+                format!("{:<8}", domain)
+            };
+            let source_span = Span::styled(
+                format!("{} ", domain_display),
+                if is_selected {
+                    Style::default().fg(Color::White)
+                } else {
+                    Style::default().fg(Color::Gray)
+                },
+            );
 
-                let (status_text, status_style) = match cand.status {
-                    VerificationStatus::Verified => (
-                        "VERIFIED",
-                        Style::default()
-                            .fg(Color::Green)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    VerificationStatus::BelowThreshold => (
-                        "BELOW THRESHOLD",
-                        Style::default()
-                            .fg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    VerificationStatus::NoFace => (
-                        "NO FACE",
-                        Style::default()
-                            .fg(Color::DarkGray)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    VerificationStatus::Error => (
-                        "ERROR",
-                        Style::default()
-                            .fg(Color::Red)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                };
+            let sim_span = Span::styled(
+                format!("{:<6}", format!("{:.2}", cand.face_similarity)),
+                if is_selected {
+                    Style::default().fg(Color::White)
+                } else {
+                    Style::default().fg(Color::Gray)
+                },
+            );
 
-                let metrics = match cand.status {
-                    VerificationStatus::Verified | VerificationStatus::BelowThreshold => {
-                        let face_str = cand
-                            .matched_face_index
-                            .map(|f| format!("Face #{f}"))
-                            .unwrap_or_else(|| "Face --".to_string());
-                        format!("Sim: {:.2}  {}", cand.similarity, face_str)
-                    }
-                    VerificationStatus::NoFace => "No face detected".to_string(),
-                    VerificationStatus::Error => {
-                        cand.error_message.as_deref().unwrap_or("Failed").to_string()
-                    }
-                };
-                let metrics_span = Span::styled(
-                    metrics,
-                    if is_selected {
-                        Style::default().fg(Color::White)
-                    } else {
-                        Style::default().fg(Color::Gray)
-                    },
-                );
+            let qual_span = Span::styled(
+                format!("{:<6}", format!("{:.2}", cand.quality_score)),
+                if is_selected {
+                    Style::default().fg(Color::White)
+                } else {
+                    Style::default().fg(Color::Gray)
+                },
+            );
 
-                Line::from(vec![
-                    cursor,
-                    num,
-                    Span::styled(format!("{:<16}", status_text), status_style),
-                    metrics_span,
-                ])
-            })
-            .collect();
+            let score_span = Span::styled(
+                format!("{:<6}", format!("{:.2}", cand.ranking_score)),
+                if is_selected {
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Yellow)
+                },
+            );
+
+            let (status_text, status_style) = match cand.status() {
+                VerificationStatus::Verified => (
+                    "VERIFIED",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                VerificationStatus::BelowThreshold => (
+                    "BELOW THRESHOLD",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                VerificationStatus::NoFace => (
+                    "NO FACE",
+                    Style::default()
+                        .fg(Color::DarkGray)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                VerificationStatus::Error => (
+                    "ERROR",
+                    Style::default()
+                        .fg(Color::Red)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            };
+            let status_span = Span::styled(status_text, status_style);
+
+            list_lines.push(Line::from(vec![
+                cursor,
+                rank_span,
+                source_span,
+                sim_span,
+                qual_span,
+                score_span,
+                status_span,
+            ]));
+        }
 
         frame.render_widget(Paragraph::new(list_lines), rows[1]);
 
         // 3. Selected Detail Box
-        let selected_cand = &app.verified_candidates[selected_idx];
+        let selected_cand = &ranked_list[selected_idx];
         let detail_block = Block::default()
             .borders(Borders::TOP)
             .border_type(BorderType::Rounded)
@@ -600,7 +680,7 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
             .title(Line::from(vec![
                 Span::styled(" Selected Candidate #", Style::default().fg(Color::Cyan)),
                 Span::styled(
-                    format!("{}", selected_idx + 1),
+                    format!("{}", selected_cand.rank),
                     Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" "),
@@ -610,16 +690,17 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
         let val_style = Style::default().fg(Color::White);
 
         let hash_str = selected_cand
+            .verification
             .candidate_image_hash
             .as_deref()
             .unwrap_or("--");
-        let hash_display = if hash_str.len() > 24 {
-            &hash_str[..24]
+        let hash_display = if hash_str.len() > 16 {
+            &hash_str[..16]
         } else {
             hash_str
         };
 
-        let status_style = match selected_cand.status {
+        let status_style = match selected_cand.status() {
             VerificationStatus::Verified => {
                 Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
             }
@@ -635,73 +716,95 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
         };
 
         let face_str = selected_cand
+            .verification
             .matched_face_index
             .map(|i| format!("Face #{i}"))
-            .unwrap_or_else(|| "None".to_string());
+            .unwrap_or_else(|| "Face --".to_string());
 
-        let mut detail_lines = vec![
+        let domain_str = selected_cand.candidate().domain.as_str();
+
+        let detail_lines = vec![
             Line::from(vec![
-                Span::styled("URL:         ", key_style),
-                Span::styled(selected_cand.candidate.url.as_str(), val_style),
+                Span::styled("RANK: ", key_style),
+                Span::styled(
+                    format!("#{:<3}", selected_cand.rank),
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("SCORE: ", key_style),
+                Span::styled(
+                    format!("{:<6.4} ", selected_cand.ranking_score),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled("QUALITY: ", key_style),
+                Span::styled(format!("{:<4.2}", selected_cand.quality_score), val_style),
             ]),
             Line::from(vec![
-                Span::styled("Status:      ", key_style),
-                Span::styled(format!("{:<16}", selected_cand.status.label()), status_style),
-                Span::styled("Sim: ", key_style),
-                Span::styled(format!("{:.4}", selected_cand.similarity), val_style),
+                Span::styled("SOURCE: ", key_style),
+                Span::styled(format!("{:<20} ", domain_str), val_style),
+                Span::styled("STATUS: ", key_style),
+                Span::styled(selected_cand.status().label(), status_style),
             ]),
             Line::from(vec![
-                Span::styled("Matched:     ", key_style),
-                Span::styled(format!("{:<16}", face_str), val_style),
-                Span::styled("Quality: ", key_style),
-                Span::styled(format!("{:.2}", selected_cand.quality), val_style),
-            ]),
-            Line::from(vec![
-                Span::styled("Image Hash:  ", key_style),
+                Span::styled("SIMILARITY: ", key_style),
+                Span::styled(
+                    format!("{:.2} (Sim:) ", selected_cand.face_similarity),
+                    val_style,
+                ),
+                Span::styled(format!("{:<8} ", face_str), Style::default().fg(Color::Cyan)),
                 Span::styled(hash_display, Style::default().fg(Color::Cyan)),
             ]),
         ];
-
-        if let Some(err) = &selected_cand.error_message {
-            detail_lines.push(Line::from(vec![
-                Span::styled("Error:       ", key_style),
-                Span::styled(err.as_str(), Style::default().fg(Color::LightRed)),
-            ]));
-        }
 
         let detail_inner = detail_block.inner(rows[2]);
         frame.render_widget(detail_block, rows[2]);
         frame.render_widget(Paragraph::new(detail_lines), detail_inner);
     } else {
         // Compact view for small terminals
-        let list_lines: Vec<Line> = app
-            .verified_candidates
-            .iter()
-            .enumerate()
-            .map(|(idx, cand)| {
-                let is_selected = idx == selected_idx;
-                let cursor = if is_selected { "▶ " } else { "  " };
-                let (status_str, status_color) = match cand.status {
-                    VerificationStatus::Verified => ("VERIFIED", Color::Green),
-                    VerificationStatus::BelowThreshold => ("BELOW THRESHOLD", Color::Yellow),
-                    VerificationStatus::NoFace => ("NO FACE", Color::DarkGray),
-                    VerificationStatus::Error => ("ERROR", Color::Red),
-                };
+        let mut list_lines: Vec<Line> = Vec::new();
+        list_lines.push(Line::from(vec![
+            Span::styled("RANK ", Style::default().fg(Color::Cyan)),
+            Span::styled("SOURCE     ", Style::default().fg(Color::Cyan)),
+            Span::styled("SIM   ", Style::default().fg(Color::Cyan)),
+            Span::styled("QUAL  ", Style::default().fg(Color::Cyan)),
+            Span::styled("SCORE  ", Style::default().fg(Color::Cyan)),
+            Span::styled("STATUS", Style::default().fg(Color::Cyan)),
+        ]));
 
-                Line::from(vec![
-                    Span::styled(cursor, Style::default().fg(Color::Yellow)),
-                    Span::styled(format!("[{}] ", idx + 1), Style::default().fg(Color::White)),
-                    Span::styled(
-                        format!("{:<15}", status_str),
-                        Style::default().fg(status_color).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        format!("Sim: {:.2}  Q: {:.2}", cand.similarity, cand.quality),
-                        Style::default().fg(Color::Gray),
-                    ),
-                ])
-            })
-            .collect();
+        for (idx, cand) in ranked_list.iter().enumerate() {
+            let is_selected = idx == selected_idx;
+            let cursor = if is_selected { "▶ " } else { "  " };
+            let (status_str, status_color) = match cand.status() {
+                VerificationStatus::Verified => ("VERIFIED", Color::Green),
+                VerificationStatus::BelowThreshold => ("BELOW_TH", Color::Yellow),
+                VerificationStatus::NoFace => ("NO_FACE", Color::DarkGray),
+                VerificationStatus::Error => ("ERROR", Color::Red),
+            };
+
+            list_lines.push(Line::from(vec![
+                Span::styled(cursor, Style::default().fg(Color::Yellow)),
+                Span::styled(format!("#{:<3} ", cand.rank), Style::default().fg(Color::White)),
+                Span::styled(
+                    format!("{:<10} ", &cand.source()[..cand.source().len().min(10)]),
+                    Style::default().fg(Color::Gray),
+                ),
+                Span::styled(
+                    format!("{:<5.2} ", cand.face_similarity),
+                    Style::default().fg(Color::Gray),
+                ),
+                Span::styled(
+                    format!("{:<5.2} ", cand.quality_score),
+                    Style::default().fg(Color::Gray),
+                ),
+                Span::styled(
+                    format!("{:<6.2} ", cand.ranking_score),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    status_str,
+                    Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        }
 
         frame.render_widget(Paragraph::new(list_lines), inner);
     }

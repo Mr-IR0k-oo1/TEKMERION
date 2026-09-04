@@ -396,3 +396,50 @@ fn renders_candidate_verification_stage_on_tall_terminal() {
     assert!(!screen.to_lowercase().contains("identity confirmed"));
 }
 
+#[test]
+fn renders_candidate_ranking_columns_and_deterministic_order() {
+    let backend = TestBackend::new(90, 26);
+    let mut terminal = Terminal::new(backend).expect("failed to create terminal");
+    let mut app = App::new();
+    app.apply(AppAction::Start);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+    app.apply(AppAction::Verify);
+
+    terminal
+        .draw(|frame| ui::render(frame, &app))
+        .expect("render failed");
+
+    let screen = buffer_to_string(&terminal);
+
+    // Verify all 6 required display columns are rendered
+    assert!(screen.contains("RANK"), "must display RANK column");
+    assert!(screen.contains("SOURCE"), "must display SOURCE column");
+    assert!(screen.contains("SIMILARITY"), "must display SIMILARITY column");
+    assert!(screen.contains("QUALITY"), "must display QUALITY column");
+    assert!(screen.contains("SCORE"), "must display SCORE column");
+    assert!(screen.contains("STATUS"), "must display STATUS column");
+
+    // Verify deterministic ranks appear in order
+    assert!(screen.contains("#1"), "must display rank #1");
+    assert!(screen.contains("#2"), "must display rank #2");
+    assert!(screen.contains("#3"), "must display rank #3");
+    assert!(screen.contains("#4"), "must display rank #4");
+
+    // Verify ranking score is not represented as probability of identity
+    assert!(
+        !screen.to_lowercase().contains("probability"),
+        "ranking must NOT be represented as a probability of identity"
+    );
+    assert!(
+        !screen.to_lowercase().contains("probability of identity"),
+        "ranking must NOT be represented as probability of identity"
+    );
+
+    // CRITICAL REQUIREMENT: Do not use the word "identity confirmed" anywhere
+    assert!(
+        !screen.to_lowercase().contains("identity confirmed"),
+        "forbidden phrasing 'identity confirmed' must never appear in TUI"
+    );
+}
+
