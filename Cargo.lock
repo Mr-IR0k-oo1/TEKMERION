@@ -1612,7 +1612,15 @@ dependencies = [
 name = "tekmerion-discovery"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
  "tekmerion-core",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

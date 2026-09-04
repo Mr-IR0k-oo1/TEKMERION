@@ -24,14 +24,47 @@ pub struct FaceAnalysis {
     pub timestamp: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SearchCandidate {
     pub url: Url,
     pub title: Option<String>,
-    pub provider: String,
+    pub domain: String,
     pub image_url: Option<Url>,
+    pub thumbnail_url: Option<Url>,
     pub snippet: Option<String>,
+    pub provider: String,
     pub discovered_at: DateTime<Utc>,
+}
+
+impl SearchCandidate {
+    /// Create a candidate with automatically extracted domain.
+    pub fn new(url: Url, provider: impl Into<String>) -> Self {
+        let domain = url
+            .host_str()
+            .unwrap_or_default()
+            .trim_start_matches("www.")
+            .to_lowercase();
+        Self {
+            url,
+            title: None,
+            domain,
+            image_url: None,
+            thumbnail_url: None,
+            snippet: None,
+            provider: provider.into(),
+            discovered_at: Utc::now(),
+        }
+    }
+
+    /// Accessor for the candidate's source/domain.
+    pub fn source(&self) -> &str {
+        &self.domain
+    }
+
+    /// Accessor for the candidate's source/domain.
+    pub fn source_domain(&self) -> &str {
+        &self.domain
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,8 +122,10 @@ mod tests {
         let candidate = SearchCandidate {
             url: Url::parse("https://example.com").unwrap(),
             title: Some("Test".to_string()),
+            domain: "example.com".to_string(),
             provider: "Google".to_string(),
             image_url: None,
+            thumbnail_url: None,
             snippet: None,
             discovered_at: Utc::now(),
         };
@@ -99,6 +134,7 @@ mod tests {
         let deserialized: SearchCandidate = serde_json::from_str(&json).unwrap();
 
         assert_eq!(candidate.url, deserialized.url);
+        assert_eq!(candidate.domain, deserialized.domain);
         assert_eq!(candidate.provider, deserialized.provider);
     }
 

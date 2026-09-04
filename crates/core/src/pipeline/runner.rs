@@ -434,8 +434,10 @@ mod tests {
         SearchCandidate {
             url: url::Url::parse("https://example.com/face").unwrap(),
             title: Some("match".to_string()),
+            domain: "example.com".to_string(),
             provider: "test".to_string(),
             image_url: None,
+            thumbnail_url: None,
             snippet: None,
             discovered_at: chrono::Utc::now(),
         }
