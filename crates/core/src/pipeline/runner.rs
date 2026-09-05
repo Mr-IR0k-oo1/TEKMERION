@@ -508,7 +508,9 @@ mod tests {
             matched: VerificationResult,
         ) -> Result<EvidenceBundle, PipelineError> {
             Ok(EvidenceBundle {
-                record: EvidenceRecord {
+                leaves: vec!["leaf".to_string()],
+                root_hash: "root".to_string(),
+                record: Some(EvidenceRecord {
                     schema_version: "1.0.0".to_string(),
                     run_id: "test-run".to_string(),
                     source_url: matched.candidate.url,
@@ -522,9 +524,7 @@ mod tests {
                     face_similarity: matched.similarity,
                     face_model: "test-model".to_string(),
                     candidate_quality: matched.quality,
-                },
-                root_hash: "root".to_string(),
-                leaf_hashes: vec!["leaf".to_string()],
+                }),
             })
         }
     }

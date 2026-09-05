@@ -16,4 +16,10 @@ pub enum EvidenceError {
 
     #[error("invalid or malformed URL: {0}")]
     InvalidUrl(String),
+
+    #[error("cannot build Merkle evidence tree from empty leaves")]
+    EmptyTree,
+
+    #[error("leaf index {index} out of bounds (tree has {count} leaves)")]
+    LeafIndexOutOfBounds { index: usize, count: usize },
 }

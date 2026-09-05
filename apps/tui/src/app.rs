@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use tekmerion_core::{PipelineState, SearchCandidate, VerificationResult, VerificationStatus};
 use tekmerion_face::FaceQualityAssessment;
 use tekmerion_verification::{CandidateRanker, RankedCandidate};
+use tekmerion_evidence::EvidenceBundle;
 use url::Url;
 
 use crate::input::{AppAction, Direction};
@@ -105,6 +106,7 @@ pub struct App {
     pub discovery_error: Option<String>,
     pub verified_candidates: Vec<VerificationResult>,
     pub ranked_candidates: Vec<RankedCandidate>,
+    pub evidence_bundle: Option<EvidenceBundle>,
 }
 
 impl Default for App {
@@ -132,6 +134,7 @@ impl App {
             discovery_error: None,
             verified_candidates: Vec::new(),
             ranked_candidates: Vec::new(),
+            evidence_bundle: None,
         }
     }
 
@@ -288,6 +291,9 @@ impl App {
                 self.ranked_candidates =
                     CandidateRanker::new().rank_results(self.verified_candidates.clone());
                 self.candidate_count = self.ranked_candidates.len();
+            }
+            if next == Stage::Evidence && self.evidence_bundle.is_none() {
+                self.populate_sample_evidence();
             }
             self.push_event(&format!("Stage complete: {}", current.label()));
         } else {

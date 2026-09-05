@@ -69,7 +69,7 @@ pub fn format_float(field: &'static str, value: f32) -> Result<String, EvidenceE
     Ok(format!("{:.6}", value))
 }
 
-/// Container for the four component SHA-256 hashes and composite record hash.
+/// Container for the five component SHA-256 hashes and composite Merkle root hash.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EvidenceHashes {
     /// SHA-256 hash of the normalized candidate image checksum.
@@ -80,7 +80,9 @@ pub struct EvidenceHashes {
     pub metadata_hash: String,
     /// SHA-256 hash of the facial similarity score, model, and quality.
     pub face_result_hash: String,
-    /// Composite SHA-256 hash anchoring all four component hashes.
+    /// SHA-256 hash of the provenance chain (run ID, provider, platform, timestamp).
+    pub provenance_hash: String,
+    /// Composite Merkle tree root hash anchoring all five leaves.
     pub record_hash: String,
 }
 
@@ -93,7 +95,7 @@ pub struct EvidenceHashes {
 /// - Canonical URL representation
 /// - No `HashMap`-dependent serialization
 /// - No `Debug` formatting
-#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvidenceRecord {
     pub schema_version: String,
     pub run_id: String,
@@ -293,37 +295,84 @@ impl EvidenceRecord {
         Ok(hex::encode(hasher.finalize()))
     }
 
-    /// Compute the composite SHA-256 `record_hash` (evidence root hash).
+    /// Compute the SHA-256 `provenance_hash`.
     ///
-    /// Binds the four component hashes into a root digest:
-    /// `SHA-256(b"record_root:v1\n" || image_hash || content_hash || metadata_hash || face_result_hash)`
+    /// Hashed inputs:
+    /// - Unicode NFC normalized `run_id`
+    /// - Unicode NFC normalized `provider`
+    /// - Unicode NFC normalized lowercase `platform`
+    /// - `retrieved_at` in RFC 3339 UTC format
+    pub fn provenance_hash(&self) -> Result<String, EvidenceError> {
+        let mut hasher = Sha256::new();
+        hasher.update(b"provenance_component:v1\n");
+
+        let fields = [
+            normalize_utf8(self.run_id.trim()),
+            normalize_utf8(self.provider.trim()),
+            normalize_utf8(self.platform.trim()).to_lowercase(),
+            self.retrieved_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        ];
+
+        for field in &fields {
+            hasher.update((field.len() as u64).to_be_bytes());
+            hasher.update(field.as_bytes());
+        }
+
+        Ok(hex::encode(hasher.finalize()))
+    }
+
+    /// Compute the composite SHA-256 `record_hash` (Merkle tree root hash over all five leaves).
     pub fn record_hash(&self) -> Result<String, EvidenceError> {
         let hashes = self.compute_hashes()?;
         Ok(hashes.record_hash)
     }
 
-    /// Compute all four component hashes and the composite root hash.
+    /// Compute all five component hashes and the Merkle tree root hash.
     pub fn compute_hashes(&self) -> Result<EvidenceHashes, EvidenceError> {
         let image_h = self.image_hash()?;
         let content_h = self.content_hash()?;
         let metadata_h = self.metadata_hash()?;
         let face_result_h = self.face_result_hash()?;
+        let provenance_h = self.provenance_hash()?;
 
-        let mut hasher = Sha256::new();
-        hasher.update(b"record_root:v1\n");
-        hasher.update(image_h.as_bytes());
-        hasher.update(content_h.as_bytes());
-        hasher.update(metadata_h.as_bytes());
-        hasher.update(face_result_h.as_bytes());
-        let record_h = hex::encode(hasher.finalize());
+        let leaves = crate::merkle::EvidenceTreeLeaves {
+            image_hash: image_h.clone(),
+            content_hash: content_h.clone(),
+            metadata_hash: metadata_h.clone(),
+            face_result_hash: face_result_h.clone(),
+            provenance_hash: provenance_h.clone(),
+        };
+
+        let tree = crate::merkle::EvidenceTree::new(leaves)?;
+        let record_h = tree.root_hash().to_string();
 
         Ok(EvidenceHashes {
             image_hash: image_h,
             content_hash: content_h,
             metadata_hash: metadata_h,
             face_result_hash: face_result_h,
+            provenance_hash: provenance_h,
             record_hash: record_h,
         })
+    }
+
+    /// Build the full deterministic Merkle evidence tree over all five canonical leaves.
+    pub fn build_tree(&self) -> Result<crate::merkle::EvidenceTree, EvidenceError> {
+        let hashes = self.compute_hashes()?;
+        let leaves = crate::merkle::EvidenceTreeLeaves {
+            image_hash: hashes.image_hash,
+            content_hash: hashes.content_hash,
+            metadata_hash: hashes.metadata_hash,
+            face_result_hash: hashes.face_result_hash,
+            provenance_hash: hashes.provenance_hash,
+        };
+        crate::merkle::EvidenceTree::new(leaves)
+    }
+
+    /// Build an `EvidenceBundle` containing the canonical leaves and Merkle root.
+    pub fn build_bundle(&self) -> Result<crate::merkle::EvidenceBundle, EvidenceError> {
+        let tree = self.build_tree()?;
+        Ok(tree.bundle().with_record(self.clone()))
     }
 
     /// Deterministic canonical byte serialization of the record.

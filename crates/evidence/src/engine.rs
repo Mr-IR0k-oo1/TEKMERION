@@ -66,24 +66,13 @@ impl EvidenceEngine for DeterministicEvidenceEngine {
             candidate_quality: matched.quality,
         };
 
-        let hashes = record.compute_hashes().map_err(|e| {
+        let bundle = record.build_bundle().map_err(|e| {
             PipelineError::Stage {
                 stage: PipelineStage::Evidence,
-                message: format!("failed to compute evidence hashes: {}", e),
+                message: format!("failed to compute evidence tree: {}", e),
             }
         })?;
 
-        let leaf_hashes = vec![
-            hashes.image_hash,
-            hashes.content_hash,
-            hashes.metadata_hash,
-            hashes.face_result_hash,
-        ];
-
-        Ok(EvidenceBundle {
-            record: record.into(),
-            root_hash: hashes.record_hash,
-            leaf_hashes,
-        })
+        Ok(bundle.into())
     }
 }

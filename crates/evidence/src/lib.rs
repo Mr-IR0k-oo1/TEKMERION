@@ -6,10 +6,16 @@
 
 pub mod engine;
 pub mod error;
+pub mod merkle;
 pub mod record;
 
 pub use engine::DeterministicEvidenceEngine;
 pub use error::EvidenceError;
+pub use merkle::{
+    hash_leaf, hash_parent, recompute_root, recompute_root_from_proof, verify_proof,
+    EvidenceBundle, EvidenceTree, EvidenceTreeLeaves, LeafType, MerkleProof, ProofDirection,
+    LEAF_PREFIX, NODE_PREFIX,
+};
 pub use record::{
     format_float, normalize_url, normalize_utf8, EvidenceHashes, EvidenceRecord,
     CURRENT_SCHEMA_VERSION,
@@ -286,11 +292,162 @@ mod tests {
 
         let bundle = engine.build_evidence(verified).await.unwrap();
 
-        assert_eq!(bundle.leaf_hashes.len(), 4);
+        assert_eq!(bundle.leaves.len(), 5);
         assert!(!bundle.root_hash.is_empty());
-        assert_eq!(bundle.record.schema_version, "1.0.0");
-        assert_eq!(bundle.record.run_id, "run-xyz");
-        assert_eq!(bundle.record.face_model, "adaface-ir101");
-        assert_eq!(bundle.record.face_similarity, 0.881234);
+        let rec = bundle.record.as_ref().unwrap();
+        assert_eq!(rec.schema_version, "1.0.0");
+        assert_eq!(rec.run_id, "run-xyz");
+        assert_eq!(rec.face_model, "adaface-ir101");
+        assert_eq!(rec.face_similarity, 0.881234);
+    }
+
+    #[test]
+    fn test_same_leaves_same_root() {
+        let leaves1 = vec![
+            "1111111111111111111111111111111111111111111111111111111111111111".to_string(),
+            "2222222222222222222222222222222222222222222222222222222222222222".to_string(),
+            "3333333333333333333333333333333333333333333333333333333333333333".to_string(),
+            "4444444444444444444444444444444444444444444444444444444444444444".to_string(),
+            "5555555555555555555555555555555555555555555555555555555555555555".to_string(),
+        ];
+        let leaves2 = leaves1.clone();
+
+        let root1 = recompute_root(&leaves1).unwrap();
+        let root2 = recompute_root(&leaves2).unwrap();
+
+        assert_eq!(root1, root2, "same leaves must produce identical root hash");
+
+        let tree1 = EvidenceTree::from_leaves(leaves1).unwrap();
+        let tree2 = EvidenceTree::from_leaves(leaves2).unwrap();
+        assert_eq!(tree1.root_hash(), tree2.root_hash());
+    }
+
+    #[test]
+    fn test_changing_one_leaf_different_root() {
+        let base_leaves = vec![
+            "1111111111111111111111111111111111111111111111111111111111111111".to_string(),
+            "2222222222222222222222222222222222222222222222222222222222222222".to_string(),
+            "3333333333333333333333333333333333333333333333333333333333333333".to_string(),
+            "4444444444444444444444444444444444444444444444444444444444444444".to_string(),
+            "5555555555555555555555555555555555555555555555555555555555555555".to_string(),
+        ];
+        let base_root = recompute_root(&base_leaves).unwrap();
+
+        // Mutate each leaf independently and verify root changes
+        for i in 0..5 {
+            let mut modified = base_leaves.clone();
+            modified[i] = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string();
+            let mod_root = recompute_root(&modified).unwrap();
+            assert_ne!(
+                base_root, mod_root,
+                "modifying leaf {} must produce a different root hash",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn test_leaf_ordering_is_deterministic() {
+        let leaf_a = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string();
+        let leaf_b = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string();
+        let leaf_c = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".to_string();
+        let leaf_d = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd".to_string();
+        let leaf_e = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_string();
+
+        let ordered = vec![
+            leaf_a.clone(),
+            leaf_b.clone(),
+            leaf_c.clone(),
+            leaf_d.clone(),
+            leaf_e.clone(),
+        ];
+        let swapped = vec![
+            leaf_b.clone(),
+            leaf_a.clone(),
+            leaf_c.clone(),
+            leaf_d.clone(),
+            leaf_e.clone(),
+        ];
+
+        let root_ordered = recompute_root(&ordered).unwrap();
+        let root_swapped = recompute_root(&swapped).unwrap();
+
+        assert_ne!(
+            root_ordered, root_swapped,
+            "permuting leaf positions must alter the Merkle root hash"
+        );
+
+        // Also test EvidenceTreeLeaves canonical order
+        let struct_leaves = EvidenceTreeLeaves::new(&leaf_a, &leaf_b, &leaf_c, &leaf_d, &leaf_e);
+        assert_eq!(struct_leaves.to_leaves_vec(), ordered);
+    }
+
+    #[test]
+    fn test_proof_verification_succeeds() {
+        let leaves = vec![
+            "image_hash_001".to_string(),
+            "content_hash_002".to_string(),
+            "metadata_hash_003".to_string(),
+            "face_result_hash_004".to_string(),
+            "provenance_hash_005".to_string(),
+        ];
+        let tree = EvidenceTree::from_leaves(leaves.clone()).unwrap();
+
+        for i in 0..leaves.len() {
+            let proof = tree.generate_proof(i).unwrap();
+            assert_eq!(proof.leaf_index, i);
+            assert_eq!(proof.leaf_hash, leaves[i]);
+            assert_eq!(proof.root_hash, tree.root_hash());
+
+            assert!(
+                verify_proof(&proof),
+                "proof for leaf {} must verify successfully",
+                i
+            );
+            assert_eq!(
+                recompute_root_from_proof(&proof),
+                tree.root_hash(),
+                "recomputing root from valid proof must equal tree root"
+            );
+        }
+    }
+
+    #[test]
+    fn test_proof_verification_fails_after_modification() {
+        let leaves = vec![
+            "image_hash_001".to_string(),
+            "content_hash_002".to_string(),
+            "metadata_hash_003".to_string(),
+            "face_result_hash_004".to_string(),
+            "provenance_hash_005".to_string(),
+        ];
+        let tree = EvidenceTree::from_leaves(leaves).unwrap();
+        let original_proof = tree.generate_proof(0).unwrap();
+
+        // 1. Modifying leaf hash
+        let mut tampered_leaf = original_proof.clone();
+        tampered_leaf.leaf_hash = "tampered_leaf_hash".to_string();
+        assert!(
+            !verify_proof(&tampered_leaf),
+            "verification must fail when leaf hash is modified"
+        );
+
+        // 2. Modifying root hash
+        let mut tampered_root = original_proof.clone();
+        tampered_root.root_hash = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        assert!(
+            !verify_proof(&tampered_root),
+            "verification must fail when root hash is modified"
+        );
+
+        // 3. Modifying sibling in audit path
+        let mut tampered_path = original_proof.clone();
+        if let Some((sibling, _)) = tampered_path.audit_path.first_mut() {
+            *sibling = "tampered_sibling_hash".to_string();
+        }
+        assert!(
+            !verify_proof(&tampered_path),
+            "verification must fail when audit path is modified"
+        );
     }
 }

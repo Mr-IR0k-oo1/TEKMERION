@@ -171,11 +171,27 @@ pub struct EvidenceRecord {
     pub candidate_quality: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvidenceBundle {
-    pub record: EvidenceRecord,
+    pub leaves: Vec<String>,
     pub root_hash: String,
-    pub leaf_hashes: Vec<String>,
+    #[serde(default)]
+    pub record: Option<EvidenceRecord>,
+}
+
+impl EvidenceBundle {
+    pub fn new(leaves: Vec<String>, root_hash: impl Into<String>) -> Self {
+        Self {
+            leaves,
+            root_hash: root_hash.into(),
+            record: None,
+        }
+    }
+
+    pub fn with_record(mut self, record: EvidenceRecord) -> Self {
+        self.record = Some(record);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
