@@ -2057,6 +2057,7 @@ dependencies = [
  "crossterm",
  "ratatui",
  "tekmerion-core",
+ "tekmerion-evidence",
  "tekmerion-face",
  "tekmerion-verification",
  "url",
