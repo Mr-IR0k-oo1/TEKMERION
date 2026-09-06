@@ -75,6 +75,61 @@ impl Stage {
     }
 }
 
+/// Top-level view tabs available in the interface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewTab {
+    Pipeline,
+    Evidence,
+    Candidates,
+    Guide,
+}
+
+impl ViewTab {
+    pub const ALL: [ViewTab; 4] = [
+        ViewTab::Pipeline,
+        ViewTab::Evidence,
+        ViewTab::Candidates,
+        ViewTab::Guide,
+    ];
+
+    pub fn index(self) -> usize {
+        match self {
+            ViewTab::Pipeline => 0,
+            ViewTab::Evidence => 1,
+            ViewTab::Candidates => 2,
+            ViewTab::Guide => 3,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ViewTab::Pipeline => "Pipeline Flow",
+            ViewTab::Evidence => "Evidence Tree",
+            ViewTab::Candidates => "Candidate Inspector",
+            ViewTab::Guide => "System Guide",
+        }
+    }
+
+    pub fn next(self) -> Self {
+        let next_idx = (self.index() + 1) % Self::ALL.len();
+        Self::ALL[next_idx]
+    }
+
+    pub fn prev(self) -> Self {
+        let prev_idx = (self.index() + Self::ALL.len() - 1) % Self::ALL.len();
+        Self::ALL[prev_idx]
+    }
+
+    pub fn from_index(idx: usize) -> Self {
+        match idx {
+            1 => ViewTab::Evidence,
+            2 => ViewTab::Candidates,
+            3 => ViewTab::Guide,
+            _ => ViewTab::Pipeline,
+        }
+    }
+}
+
 /// Top-level status of the interface.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppStatus {
@@ -107,6 +162,15 @@ pub struct App {
     pub verified_candidates: Vec<VerificationResult>,
     pub ranked_candidates: Vec<RankedCandidate>,
     pub evidence_bundle: Option<EvidenceBundle>,
+    pub active_tab: ViewTab,
+    pub show_help: bool,
+    pub input_image_name: String,
+    pub input_image_resolution: String,
+    pub input_image_hash: String,
+    pub blockchain_network: String,
+    pub blockchain_contract: String,
+    pub blockchain_block: u64,
+    pub blockchain_confirmations: u64,
 }
 
 impl Default for App {
@@ -135,7 +199,69 @@ impl App {
             verified_candidates: Vec::new(),
             ranked_candidates: Vec::new(),
             evidence_bundle: None,
+            active_tab: ViewTab::Pipeline,
+            show_help: false,
+            input_image_name: "query_face.jpg".to_string(),
+            input_image_resolution: "1920x1080".to_string(),
+            input_image_hash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
+            blockchain_network: "Sepolia Testnet".to_string(),
+            blockchain_contract: "0x71C2d385aE2F56d9812A45B8a9b70d41C68E3a9E".to_string(),
+            blockchain_block: 0,
+            blockchain_confirmations: 0,
         }
+    }
+
+    /// Create an App configured with a specific input image file.
+    /// If the file exists, it reads its metadata, detects dimensions (for PNG/JPEG),
+    /// and calculates its cryptographic SHA-256 digest.
+    pub fn from_image_path(path: impl AsRef<std::path::Path>) -> Self {
+        let mut app = Self::new();
+        let path_ref = path.as_ref();
+        let display_name = path_ref
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_else(|| path_ref.to_str().unwrap_or("query_face.jpg"))
+            .to_string();
+
+        if path_ref.exists() && path_ref.is_file() {
+            if let Ok(bytes) = std::fs::read(path_ref) {
+                use sha2::{Digest, Sha256};
+                let mut hasher = Sha256::new();
+                hasher.update(&bytes);
+                let hash = hex::encode(hasher.finalize());
+
+                let size = bytes.len();
+                let size_str = if size < 1024 {
+                    format!("{} B", size)
+                } else if size < 1024 * 1024 {
+                    format!("{:.1} KB", size as f64 / 1024.0)
+                } else {
+                    format!("{:.2} MB", size as f64 / (1024.0 * 1024.0))
+                };
+
+                let resolution = if let Some((w, h)) = detect_image_dimensions(&bytes) {
+                    format!("{}x{} ({})", w, h, size_str)
+                } else {
+                    format!("File: {}", size_str)
+                };
+
+                app.input_image_name = display_name;
+                app.input_image_resolution = resolution;
+                app.input_image_hash = hash;
+                app.push_event(&format!(
+                    "Loaded input image: {} ({})",
+                    app.input_image_name, app.input_image_resolution
+                ));
+                return app;
+            }
+        }
+
+        app.input_image_name = display_name;
+        app.push_event(&format!(
+            "Input file not found at '{}', using demo fallback",
+            path_ref.display()
+        ));
+        app
     }
 
     /// Sample verified candidates covering all candidate verification statuses.
@@ -258,6 +384,11 @@ impl App {
             AppAction::Tamper => self.tamper(),
             AppAction::Reset => self.reset(),
             AppAction::Select(dir) => self.select(dir),
+            AppAction::ToggleHelp => self.show_help = !self.show_help,
+            AppAction::CloseOverlay => self.show_help = false,
+            AppAction::NextTab => self.active_tab = self.active_tab.next(),
+            AppAction::PrevTab => self.active_tab = self.active_tab.prev(),
+            AppAction::SwitchTab(idx) => self.active_tab = ViewTab::from_index(idx),
             AppAction::Quit => {}
         }
     }
@@ -297,6 +428,11 @@ impl App {
             }
             if next == Stage::Evidence && self.evidence_bundle.is_none() {
                 self.populate_sample_evidence();
+            }
+            if next == Stage::Blockchain && self.tx_hash == "--" {
+                self.tx_hash = "0x9a3f7c2b5e8d1a4f0c7b3e2a6d9c8b1a4f5e7d2c3b8a1e9f0d6c4b2a8e1f3a5b".to_string();
+                self.blockchain_block = 4892104;
+                self.blockchain_confirmations = 12;
             }
             self.push_event(&format!("Stage complete: {}", current.label()));
         } else {
@@ -381,6 +517,10 @@ impl App {
         self.verified_candidates.clear();
         self.ranked_candidates.clear();
         self.evidence_bundle = None;
+        self.show_help = false;
+        self.active_tab = ViewTab::Pipeline;
+        self.blockchain_block = 0;
+        self.blockchain_confirmations = 0;
         self.push_event("Pipeline reset");
     }
 
@@ -451,6 +591,41 @@ impl App {
             AppStatus::Tampered => "TAMPERED",
         }
     }
+}
+
+/// Helper to extract width and height from PNG or JPEG image headers without external decoders.
+pub fn detect_image_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    // PNG magic: 89 50 4E 47 0D 0A 1A 0A
+    if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) && bytes.len() >= 24 {
+        let width = u32::from_be_bytes(bytes[16..20].try_into().ok()?);
+        let height = u32::from_be_bytes(bytes[20..24].try_into().ok()?);
+        return Some((width, height));
+    }
+    // JPEG magic: FF D8 FF
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        let mut idx = 2;
+        while idx + 8 < bytes.len() {
+            if bytes[idx] != 0xFF {
+                idx += 1;
+                continue;
+            }
+            let marker = bytes[idx + 1];
+            // SOF0 (0xC0), SOF1 (0xC1), SOF2 (0xC2) baseline / progressive DCT
+            if marker == 0xC0 || marker == 0xC1 || marker == 0xC2 {
+                let height = u16::from_be_bytes([bytes[idx + 5], bytes[idx + 6]]) as u32;
+                let width = u16::from_be_bytes([bytes[idx + 7], bytes[idx + 8]]) as u32;
+                return Some((width, height));
+            }
+            // Skip marker segment
+            if idx + 3 < bytes.len() {
+                let length = u16::from_be_bytes([bytes[idx + 2], bytes[idx + 3]]) as usize;
+                idx += 2 + length;
+            } else {
+                break;
+            }
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -618,5 +793,75 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn view_tab_cycling_and_indexing() {
+        let mut tab = ViewTab::Pipeline;
+        assert_eq!(tab.index(), 0);
+        assert_eq!(tab.label(), "Pipeline Flow");
+
+        tab = tab.next();
+        assert_eq!(tab, ViewTab::Evidence);
+        assert_eq!(tab.index(), 1);
+
+        tab = tab.next();
+        assert_eq!(tab, ViewTab::Candidates);
+
+        tab = tab.next();
+        assert_eq!(tab, ViewTab::Guide);
+
+        tab = tab.next();
+        assert_eq!(tab, ViewTab::Pipeline);
+
+        tab = tab.prev();
+        assert_eq!(tab, ViewTab::Guide);
+
+        assert_eq!(ViewTab::from_index(0), ViewTab::Pipeline);
+        assert_eq!(ViewTab::from_index(1), ViewTab::Evidence);
+        assert_eq!(ViewTab::from_index(2), ViewTab::Candidates);
+        assert_eq!(ViewTab::from_index(3), ViewTab::Guide);
+    }
+
+    #[test]
+    fn help_and_tab_actions() {
+        let mut app = App::new();
+        assert!(!app.show_help);
+        assert_eq!(app.active_tab, ViewTab::Pipeline);
+
+        app.apply(AppAction::ToggleHelp);
+        assert!(app.show_help);
+
+        app.apply(AppAction::CloseOverlay);
+        assert!(!app.show_help);
+
+        app.apply(AppAction::NextTab);
+        assert_eq!(app.active_tab, ViewTab::Evidence);
+
+        app.apply(AppAction::SwitchTab(2));
+        assert_eq!(app.active_tab, ViewTab::Candidates);
+
+        app.apply(AppAction::PrevTab);
+        assert_eq!(app.active_tab, ViewTab::Evidence);
+    }
+
+    #[test]
+    fn from_image_path_fallback_when_missing() {
+        let app = App::from_image_path("non_existent_file_123.jpg");
+        assert_eq!(app.input_image_name, "non_existent_file_123.jpg");
+        assert!(app.events.iter().any(|e| e.contains("Input file not found")));
+    }
+
+    #[test]
+    fn detect_dimensions_for_synthetic_png() {
+        let mut png_bytes = vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]; // PNG magic
+        png_bytes.extend_from_slice(&[0, 0, 0, 13]); // IHDR chunk length
+        png_bytes.extend_from_slice(b"IHDR");
+        png_bytes.extend_from_slice(&640u32.to_be_bytes()); // width 640
+        png_bytes.extend_from_slice(&480u32.to_be_bytes()); // height 480
+        png_bytes.extend_from_slice(&[8, 2, 0, 0, 0]);
+
+        let dims = detect_image_dimensions(&png_bytes);
+        assert_eq!(dims, Some((640, 480)));
     }
 }

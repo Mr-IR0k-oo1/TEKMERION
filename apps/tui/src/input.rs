@@ -22,6 +22,16 @@ pub enum AppAction {
     Select(Direction),
     /// Q or Ctrl+C: quit and restore the terminal.
     Quit,
+    /// ? or H: toggle the help / architecture explainer modal.
+    ToggleHelp,
+    /// TAB: cycle to the next view tab.
+    NextTab,
+    /// BACKTAB (Shift+Tab): cycle to the previous view tab.
+    PrevTab,
+    /// 1..=4: switch directly to a view tab (0-indexed).
+    SwitchTab(usize),
+    /// ESC: close open modals / overlays.
+    CloseOverlay,
 }
 
 /// Translate a key event into an [`AppAction`].
@@ -38,6 +48,14 @@ pub fn handle_key(key: KeyEvent) -> Option<AppAction> {
         KeyCode::Char('t') | KeyCode::Char('T') => Some(AppAction::Tamper),
         KeyCode::Char('r') | KeyCode::Char('R') => Some(AppAction::Reset),
         KeyCode::Char('q') | KeyCode::Char('Q') => Some(AppAction::Quit),
+        KeyCode::Char('?') | KeyCode::Char('h') | KeyCode::Char('H') => Some(AppAction::ToggleHelp),
+        KeyCode::Tab => Some(AppAction::NextTab),
+        KeyCode::BackTab => Some(AppAction::PrevTab),
+        KeyCode::Char('1') => Some(AppAction::SwitchTab(0)),
+        KeyCode::Char('2') => Some(AppAction::SwitchTab(1)),
+        KeyCode::Char('3') => Some(AppAction::SwitchTab(2)),
+        KeyCode::Char('4') => Some(AppAction::SwitchTab(3)),
+        KeyCode::Esc => Some(AppAction::CloseOverlay),
         KeyCode::Up => Some(AppAction::Select(Direction::Up)),
         KeyCode::Down => Some(AppAction::Select(Direction::Down)),
         _ => None,
@@ -107,6 +125,54 @@ mod tests {
         assert_eq!(
             handle_key(key(KeyCode::Down, KeyModifiers::NONE)),
             Some(AppAction::Select(Direction::Down))
+        );
+    }
+
+    #[test]
+    fn help_and_overlay_keys() {
+        assert_eq!(
+            handle_key(key(KeyCode::Char('?'), KeyModifiers::NONE)),
+            Some(AppAction::ToggleHelp)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('h'), KeyModifiers::NONE)),
+            Some(AppAction::ToggleHelp)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('H'), KeyModifiers::NONE)),
+            Some(AppAction::ToggleHelp)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Esc, KeyModifiers::NONE)),
+            Some(AppAction::CloseOverlay)
+        );
+    }
+
+    #[test]
+    fn tab_navigation_keys() {
+        assert_eq!(
+            handle_key(key(KeyCode::Tab, KeyModifiers::NONE)),
+            Some(AppAction::NextTab)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::BackTab, KeyModifiers::NONE)),
+            Some(AppAction::PrevTab)
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('1'), KeyModifiers::NONE)),
+            Some(AppAction::SwitchTab(0))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('2'), KeyModifiers::NONE)),
+            Some(AppAction::SwitchTab(1))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('3'), KeyModifiers::NONE)),
+            Some(AppAction::SwitchTab(2))
+        );
+        assert_eq!(
+            handle_key(key(KeyCode::Char('4'), KeyModifiers::NONE)),
+            Some(AppAction::SwitchTab(3))
         );
     }
 

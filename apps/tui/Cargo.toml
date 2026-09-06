@@ -14,3 +14,5 @@ chrono = { workspace = true }
 url = { workspace = true }
 tekmerion-verification = { path = "../../crates/verification" }
 tekmerion-evidence = { path = "../../crates/evidence" }
+sha2 = "0.10"
+hex = "0.4"
