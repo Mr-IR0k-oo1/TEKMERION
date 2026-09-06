@@ -1,8 +1,11 @@
-//! TEKMERION audit trail and provenance.
-//!
-//! This crate is the placeholder for the durable audit / provenance record of
-//! pipeline runs. No persistence is implemented yet; the crate will consume
-//! data from `tekmerion-core` in later phases.
+//! TEKMERION audit trail, provenance tracking, and persistent run bundle management.
 
-/// Human-friendly description of the crate's planned responsibility.
-pub const DESCRIPTION: &str = "audit trail and provenance recording";
+pub mod error;
+pub mod events;
+pub mod logger;
+pub mod persistence;
+
+pub use error::AuditError;
+pub use events::{AuditEvent, EventType};
+pub use logger::AuditLogger;
+pub use persistence::{RunBundleManager, RunBundleMeta};

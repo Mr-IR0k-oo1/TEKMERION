@@ -1974,14 +1974,35 @@ dependencies = [
 name = "tekmerion-audit"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
  "tekmerion-core",
+ "tekmerion-evidence",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
 name = "tekmerion-blockchain"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chrono",
+ "hex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
  "tekmerion-core",
+ "tekmerion-evidence",
+ "thiserror 2.0.20",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -2057,11 +2078,17 @@ dependencies = [
  "crossterm",
  "hex",
  "ratatui",
+ "serde",
+ "serde_json",
  "sha2",
+ "tekmerion-audit",
+ "tekmerion-blockchain",
  "tekmerion-core",
+ "tekmerion-discovery",
  "tekmerion-evidence",
  "tekmerion-face",
  "tekmerion-verification",
+ "tokio",
  "url",
 ]
 

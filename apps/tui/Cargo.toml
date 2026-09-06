@@ -14,5 +14,12 @@ chrono = { workspace = true }
 url = { workspace = true }
 tekmerion-verification = { path = "../../crates/verification" }
 tekmerion-evidence = { path = "../../crates/evidence" }
+tekmerion-discovery = { path = "../../crates/discovery" }
+tekmerion-blockchain = { path = "../../crates/blockchain" }
+tekmerion-audit = { path = "../../crates/audit" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = "0.10"
 hex = "0.4"
+

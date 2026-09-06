@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 
+use tekmerion_audit::RunBundleManager;
 use tekmerion_core::{PipelineState, SearchCandidate, VerificationResult, VerificationStatus};
 use tekmerion_evidence::{EvidenceBundle, EvidenceRecord, CURRENT_SCHEMA_VERSION};
 use tekmerion_face::FaceQualityAssessment;
@@ -150,6 +152,7 @@ pub struct App {
     pub candidate_count: usize,
     pub selected_candidate: usize,
     pub evidence_root: String,
+    pub chain_root: String,
     pub tx_hash: String,
     pub verification_result: String,
     pub events: VecDeque<String>,
@@ -171,6 +174,15 @@ pub struct App {
     pub blockchain_contract: String,
     pub blockchain_block: u64,
     pub blockchain_confirmations: u64,
+    pub tampered_leaf: Option<String>,
+    pub tampered_field: Option<String>,
+    pub original_leaf_hash: Option<String>,
+    pub tampered_leaf_hash: Option<String>,
+    pub original_record: Option<EvidenceRecord>,
+    pub current_record: Option<EvidenceRecord>,
+    pub run_id: String,
+    pub demo_mode: bool,
+    pub input_image_path: Option<String>,
 }
 
 impl Default for App {
@@ -187,6 +199,7 @@ impl App {
             candidate_count: 0,
             selected_candidate: 0,
             evidence_root: "--".to_string(),
+            chain_root: "--".to_string(),
             tx_hash: "--".to_string(),
             verification_result: "pending".to_string(),
             events: VecDeque::new(),
@@ -208,8 +221,18 @@ impl App {
             blockchain_contract: "0x71C2d385aE2F56d9812A45B8a9b70d41C68E3a9E".to_string(),
             blockchain_block: 0,
             blockchain_confirmations: 0,
+            tampered_leaf: None,
+            tampered_field: None,
+            original_leaf_hash: None,
+            tampered_leaf_hash: None,
+            original_record: None,
+            current_record: None,
+            run_id: RunBundleManager::generate_run_id(),
+            demo_mode: false,
+            input_image_path: None,
         }
     }
+
 
     /// Create an App configured with a specific input image file.
     /// If the file exists, it reads its metadata, detects dimensions (for PNG/JPEG),
@@ -217,6 +240,7 @@ impl App {
     pub fn from_image_path(path: impl AsRef<std::path::Path>) -> Self {
         let mut app = Self::new();
         let path_ref = path.as_ref();
+        app.input_image_path = Some(path_ref.to_string_lossy().to_string());
         let display_name = path_ref
             .file_name()
             .and_then(|n| n.to_str())
@@ -403,6 +427,7 @@ impl App {
         self.push_event("Pipeline started");
     }
 
+
     fn verify(&mut self) {
         let Some(current) = self.current else {
             return;
@@ -433,14 +458,123 @@ impl App {
                 self.tx_hash = "0x9a3f7c2b5e8d1a4f0c7b3e2a6d9c8b1a4f5e7d2c3b8a1e9f0d6c4b2a8e1f3a5b".to_string();
                 self.blockchain_block = 4892104;
                 self.blockchain_confirmations = 12;
+                if self.chain_root == "--" && self.evidence_root != "--" {
+                    self.chain_root = self.evidence_root.clone();
+                }
+            }
+            if next == Stage::FinalVerify {
+                if self.chain_root == "--" && self.evidence_root != "--" {
+                    self.chain_root = self.evidence_root.clone();
+                }
+                self.verification_result = "verified".to_string();
             }
             self.push_event(&format!("Stage complete: {}", current.label()));
         } else {
             self.status = AppStatus::Completed;
             self.current = None;
             self.verification_result = "verified".to_string();
-            self.push_event("Pipeline verified");
+            self.push_event("Pipeline verified: Local Merkle root matches on-chain anchor ✓");
+            if let Ok(path) = self.persist_run_bundle() {
+                self.push_event(&format!("Forensic bundle saved: {}", path.display()));
+            }
         }
+    }
+
+    /// Persist the complete forensic run bundle to `runs/<run_id>/` according to Section 16 & 17.
+    pub fn persist_run_bundle(&mut self) -> Result<PathBuf, String> {
+        let runs_dir = Path::new("runs");
+        let run_dir = runs_dir.join(&self.run_id);
+
+        let input_dir = run_dir.join("input");
+        let disc_dir = run_dir.join("discovery");
+        let ver_dir = run_dir.join("verification");
+        let ev_dir = run_dir.join("evidence");
+        let chain_dir = run_dir.join("blockchain");
+
+        std::fs::create_dir_all(&input_dir).map_err(|e| format!("Failed to create input dir: {e}"))?;
+        std::fs::create_dir_all(&disc_dir).map_err(|e| format!("Failed to create discovery dir: {e}"))?;
+        std::fs::create_dir_all(&ver_dir).map_err(|e| format!("Failed to create verification dir: {e}"))?;
+        std::fs::create_dir_all(&ev_dir).map_err(|e| format!("Failed to create evidence dir: {e}"))?;
+        std::fs::create_dir_all(&chain_dir).map_err(|e| format!("Failed to create blockchain dir: {e}"))?;
+
+        if let Some(src_path) = &self.input_image_path {
+            let src = Path::new(src_path);
+            if src.is_file() {
+                let dest = input_dir.join(&self.input_image_name);
+                let _ = std::fs::copy(src, dest);
+            }
+        }
+        let input_meta = serde_json::json!({
+            "name": self.input_image_name,
+            "resolution": self.input_image_resolution,
+            "sha256": self.input_image_hash,
+            "run_id": self.run_id,
+            "recorded_at": chrono::Utc::now()
+        });
+        let _ = std::fs::write(
+            input_dir.join("input_metadata.json"),
+            serde_json::to_string_pretty(&input_meta).unwrap_or_default(),
+        );
+
+        let candidates: Vec<_> = self.verified_candidates.iter().map(|v| &v.candidate).collect();
+        let _ = std::fs::write(
+            disc_dir.join("candidates.json"),
+            serde_json::to_string_pretty(&candidates).unwrap_or_default(),
+        );
+
+        let _ = std::fs::write(
+            ver_dir.join("results.json"),
+            serde_json::to_string_pretty(&self.verified_candidates).unwrap_or_default(),
+        );
+
+        if let Some(record) = &self.current_record {
+            let _ = std::fs::write(
+                ev_dir.join("evidence.json"),
+                serde_json::to_string_pretty(record).unwrap_or_default(),
+            );
+        }
+        if let Some(bundle) = &self.evidence_bundle {
+            let _ = std::fs::write(
+                ev_dir.join("leaves.json"),
+                serde_json::to_string_pretty(&bundle.leaves).unwrap_or_default(),
+            );
+            let root_meta = serde_json::json!({
+                "root_hash": bundle.root_hash,
+                "generated_at": chrono::Utc::now()
+            });
+            let _ = std::fs::write(
+                ev_dir.join("root.json"),
+                serde_json::to_string_pretty(&root_meta).unwrap_or_default(),
+            );
+        }
+
+        let tx_meta = serde_json::json!({
+            "tx_hash": self.tx_hash,
+            "block_number": self.blockchain_block,
+            "confirmations": self.blockchain_confirmations,
+            "network": self.blockchain_network,
+            "contract": self.blockchain_contract,
+            "registered_root": self.chain_root,
+            "timestamp": chrono::Utc::now()
+        });
+        let _ = std::fs::write(
+            chain_dir.join("transaction.json"),
+            serde_json::to_string_pretty(&tx_meta).unwrap_or_default(),
+        );
+
+        let mut audit_content = String::new();
+        for event_msg in &self.events {
+            let entry = serde_json::json!({
+                "event": event_msg,
+                "timestamp": chrono::Utc::now(),
+                "run_id": self.run_id
+            });
+            audit_content.push_str(&entry.to_string());
+            audit_content.push('\n');
+        }
+        let _ = std::fs::write(run_dir.join("audit.jsonl"), audit_content);
+
+        Ok(run_dir)
     }
 
     /// Set verified candidate results and automatically rank them.
@@ -467,14 +601,14 @@ impl App {
 
         let record = EvidenceRecord {
             schema_version: CURRENT_SCHEMA_VERSION.to_string(),
-            run_id: "demo-run-001".to_string(),
+            run_id: self.run_id.clone(),
             source_url: matched.candidate.url.clone(),
             domain: matched.candidate.domain.clone(),
             platform: "web".to_string(),
             provider: matched.candidate.provider.clone(),
             retrieved_at: matched.candidate.discovered_at,
-            title: matched.candidate.title.clone().unwrap_or_default(),
-            text: matched.candidate.snippet.clone().unwrap_or_default(),
+            title: matched.candidate.title.clone().unwrap_or_else(|| "Original photograph".to_string()),
+            text: matched.candidate.snippet.clone().unwrap_or_else(|| "Software engineer portrait".to_string()),
             image_sha256: matched.candidate_image_hash.clone().unwrap_or_else(|| {
                 "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string()
             }),
@@ -485,18 +619,122 @@ impl App {
 
         if let Ok(bundle) = record.build_bundle() {
             self.evidence_root = bundle.root_hash.clone();
+            if self.chain_root == "--" {
+                self.chain_root = bundle.root_hash.clone();
+            }
             self.evidence_bundle = Some(bundle);
+            self.original_record = Some(record.clone());
+            self.current_record = Some(record);
         }
     }
 
     fn tamper(&mut self) {
-        if self.status != AppStatus::Running {
+        if self.status != AppStatus::Running && self.status != AppStatus::Completed {
             return;
         }
+
+        if self.evidence_bundle.is_none() {
+            self.populate_sample_evidence();
+        }
+
+        let original_record = match &self.original_record {
+            Some(r) => r.clone(),
+            None => match &self.current_record {
+                Some(r) => r.clone(),
+                None => {
+                    let matched = if let Some(top) = self.ranked_candidates.first() {
+                        top.verification.clone()
+                    } else if let Some(first) = self.verified_candidates.first() {
+                        first.clone()
+                    } else {
+                        Self::sample_verified_candidates().remove(0)
+                    };
+
+                    EvidenceRecord {
+                        schema_version: CURRENT_SCHEMA_VERSION.to_string(),
+                        run_id: self.run_id.clone(),
+                        source_url: matched.candidate.url,
+                        domain: matched.candidate.domain,
+                        platform: "web".to_string(),
+                        provider: matched.candidate.provider,
+                        retrieved_at: matched.candidate.discovered_at,
+                        title: "Original photograph".to_string(),
+                        text: "Software engineer portrait".to_string(),
+                        image_sha256: matched.candidate_image_hash.unwrap_or_else(|| {
+                            "7a9f82c4e1d3b5a61b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a".to_string()
+                        }),
+                        face_similarity: matched.similarity,
+                        face_model: "insightface-arcface-r100".to_string(),
+                        candidate_quality: matched.quality,
+                    }
+                }
+            },
+        };
+
+        // Ensure chain_root anchors the original untampered root
+        if self.chain_root == "--" {
+            let bundle = original_record.build_bundle().unwrap();
+            self.chain_root = bundle.root_hash.clone();
+            self.evidence_root = bundle.root_hash.clone();
+        }
+
+        // 1. Mutate field: title -> "Modified photograph [UNAUTHORIZED ALTERATION]"
+        let mut tampered_record = original_record.clone();
+        tampered_record.title = "Modified photograph [UNAUTHORIZED ALTERATION]".to_string();
+
+        let original_hashes = original_record.compute_hashes().unwrap();
+        let tampered_hashes = tampered_record.compute_hashes().unwrap();
+        let tampered_bundle = tampered_record.build_bundle().unwrap();
+
+        self.evidence_root = tampered_bundle.root_hash.clone();
+        self.evidence_bundle = Some(tampered_bundle);
+        self.current_record = Some(tampered_record);
+
+        self.tampered_leaf = Some("CONTENT (Leaf #1)".to_string());
+        self.tampered_field = Some("title".to_string());
+        self.original_leaf_hash = Some(original_hashes.content_hash);
+        self.tampered_leaf_hash = Some(tampered_hashes.content_hash);
+
         self.status = AppStatus::Tampered;
         self.current = None;
         self.verification_result = "tampered".to_string();
-        self.push_event("Tamper detected");
+
+        self.push_event("Tamper detected: local evidence modified (title altered)");
+        if let (Some(orig), Some(tamp)) = (&self.original_leaf_hash, &self.tampered_leaf_hash) {
+            self.push_event(&format!(
+                "Leaf #1 (CONTENT) changed: {}... -> {}...",
+                &orig[..12],
+                &tamp[..12]
+            ));
+        }
+        self.push_event(&format!(
+            "Local Root: {}... != Chain Root: {}...",
+            &self.evidence_root[..12.min(self.evidence_root.len())],
+            &self.chain_root[..12.min(self.chain_root.len())]
+        ));
+        self.push_event("STATUS: TAMPER DETECTED (Cryptographic hash mismatch)");
+
+        // Log tamper to persisted run directory if present
+        let run_dir = Path::new("runs").join(&self.run_id);
+        if run_dir.exists() {
+            let entry = serde_json::json!({
+                "event": "TAMPER_DETECTED",
+                "field": "title",
+                "leaf": "CONTENT (Leaf #1)",
+                "local_root": self.evidence_root,
+                "chain_root": self.chain_root,
+                "timestamp": chrono::Utc::now(),
+                "run_id": self.run_id
+            });
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(run_dir.join("audit.jsonl"))
+            {
+                use std::io::Write;
+                let _ = writeln!(file, "{}", entry);
+            }
+        }
     }
 
     fn reset(&mut self) {
@@ -505,6 +743,7 @@ impl App {
         self.candidate_count = 0;
         self.selected_candidate = 0;
         self.evidence_root = "--".to_string();
+        self.chain_root = "--".to_string();
         self.tx_hash = "--".to_string();
         self.verification_result = "pending".to_string();
         self.events.clear();
@@ -521,6 +760,13 @@ impl App {
         self.active_tab = ViewTab::Pipeline;
         self.blockchain_block = 0;
         self.blockchain_confirmations = 0;
+        self.tampered_leaf = None;
+        self.tampered_field = None;
+        self.original_leaf_hash = None;
+        self.tampered_leaf_hash = None;
+        self.original_record = None;
+        self.current_record = None;
+        self.run_id = RunBundleManager::generate_run_id();
         self.push_event("Pipeline reset");
     }
 
@@ -708,6 +954,12 @@ mod tests {
         assert_eq!(app.status, AppStatus::Tampered);
         assert_eq!(app.verification_result, "tampered");
         assert_eq!(app.pipeline_state(), PipelineState::TamperDetected);
+        assert!(app.tampered_leaf.is_some());
+        assert_eq!(app.tampered_field, Some("title".to_string()));
+        assert_ne!(app.evidence_root, app.chain_root);
+        assert!(app.original_leaf_hash.is_some());
+        assert!(app.tampered_leaf_hash.is_some());
+        assert_ne!(app.original_leaf_hash, app.tampered_leaf_hash);
     }
 
     #[test]

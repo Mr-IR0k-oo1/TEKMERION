@@ -1,11 +1,11 @@
-//! TEKMERION blockchain anchoring and verification.
+//! TEKMERION blockchain client and evidence registry.
 //!
-//! This crate is the placeholder for on-chain evidence registration and
-//! verification. No blockchain client or contract binding is implemented yet;
-//! the pipeline consumes the [`BlockchainRecord`] domain structure from
-//! `tekmerion-core`.
-//!
-//! [`BlockchainRecord`]: tekmerion_core::BlockchainRecord
+//! Provides anchoring and verification of evidence roots onto Ethereum Sepolia.
 
-/// Human-friendly description of the crate's planned responsibility.
-pub const DESCRIPTION: &str = "on-chain evidence anchoring and verification";
+pub mod client;
+pub mod error;
+pub mod mock;
+
+pub use client::{BlockchainClient, BlockchainConfig};
+pub use error::BlockchainError;
+pub use mock::{SimulatedBlockchainClient, SimulatedOnChainEvidence};

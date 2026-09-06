@@ -1,2 +1,25 @@
+# Rust build artifacts
 /target
 Cargo.lock
+
+# Environment secrets
+.env
+.env.local
+*.env
+
+# Local run artifacts (forensic bundles generated during test runs)
+runs/*
+!runs/.gitkeep
+apps/**/runs/*
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+workers/face/.venv/
+
+# IDE & Editor artifacts
+.vscode/
+.idea/
+*.swp

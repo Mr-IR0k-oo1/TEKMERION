@@ -1032,7 +1032,11 @@ fn render_evidence_tree(frame: &mut Frame, area: Rect, app: &App) {
         ]))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(if app.status == AppStatus::Tampered {
+            Style::default().fg(Color::Red)
+        } else {
+            Style::default().fg(Color::Cyan)
+        });
 
     let key_style = Style::default().fg(Color::White);
     let check_style = Style::default()
@@ -1043,11 +1047,27 @@ fn render_evidence_tree(frame: &mut Frame, area: Rect, app: &App) {
         .fg(Color::Yellow)
         .add_modifier(Modifier::BOLD);
 
-    let lines = vec![
+    let is_tampered = app.status == AppStatus::Tampered;
+
+    let content_leaf_line = if is_tampered {
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "CONTENT"), Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled("✗", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled("  [TAMPER DETECTED - title modified]", Style::default().fg(Color::Yellow)),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "CONTENT"), key_style),
+            Span::styled("✓", check_style),
+            Span::styled("  [Canonical JSON payload digest]", Style::default().fg(Color::DarkGray)),
+        ])
+    };
+
+    let mut lines = vec![
         Line::from(Span::styled(
-            "EVIDENCE TREE",
+            "FIVE-LEAF CRYPTOGRAPHIC ANCHOR",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(if is_tampered { Color::Red } else { Color::Cyan })
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
@@ -1056,11 +1076,7 @@ fn render_evidence_tree(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled("✓", check_style),
             Span::styled("  [SHA-256 binary image digest]", Style::default().fg(Color::DarkGray)),
         ]),
-        Line::from(vec![
-            Span::styled(format!("{:<15}", "CONTENT"), key_style),
-            Span::styled("✓", check_style),
-            Span::styled("  [Canonical JSON payload digest]", Style::default().fg(Color::DarkGray)),
-        ]),
+        content_leaf_line,
         Line::from(vec![
             Span::styled(format!("{:<15}", "METADATA"), key_style),
             Span::styled("✓", check_style),
@@ -1077,9 +1093,22 @@ fn render_evidence_tree(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled("  [Run ID & provider attestation]", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(""),
-        Line::from(Span::styled("ROOT", root_label_style)),
-        Line::from(Span::styled(app.evidence_root.as_str(), root_val_style)),
     ];
+
+    if is_tampered {
+        lines.push(Line::from(vec![
+            Span::styled("ROOT (LOCAL): ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(app.evidence_root.as_str(), Style::default().fg(Color::Red)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("ROOT (CHAIN): ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(app.chain_root.as_str(), Style::default().fg(Color::Green)),
+            Span::styled("  [MISMATCH ✗]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        ]));
+    } else {
+        lines.push(Line::from(Span::styled("ROOT", root_label_style)));
+        lines.push(Line::from(Span::styled(app.evidence_root.as_str(), root_val_style)));
+    }
 
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
@@ -1384,7 +1413,17 @@ fn render_final_verify_stage(frame: &mut Frame, area: Rect, app: &App) {
         Span::styled("eth_call -> getAnchorRecord(root)", val_style),
     ]));
 
-    let root_snip = if app.evidence_root == "--" {
+    let chain_snip = if app.chain_root == "--" {
+        if app.evidence_root == "--" {
+            "--".to_string()
+        } else {
+            format!("{}...", &app.evidence_root[..16.min(app.evidence_root.len())])
+        }
+    } else {
+        format!("{}...", &app.chain_root[..16.min(app.chain_root.len())])
+    };
+
+    let local_snip = if app.evidence_root == "--" {
         "--".to_string()
     } else {
         format!("{}...", &app.evidence_root[..16.min(app.evidence_root.len())])
@@ -1392,24 +1431,40 @@ fn render_final_verify_stage(frame: &mut Frame, area: Rect, app: &App) {
 
     lines.push(Line::from(vec![
         Span::styled("On-Chain Root: ", key_style),
-        Span::styled(root_snip.clone(), Style::default().fg(Color::Cyan)),
+        Span::styled(chain_snip, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
     ]));
 
-    lines.push(Line::from(vec![
-        Span::styled("Local Root: ", key_style),
-        Span::styled(root_snip, Style::default().fg(Color::Cyan)),
-        Span::styled("  [MATCH ✓]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-    ]));
-
-    let match_status = if is_tampered {
-        Span::styled("FAILED (Cryptographic hash mismatch)", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+    if is_tampered {
+        lines.push(Line::from(vec![
+            Span::styled("Local Root:    ", key_style),
+            Span::styled(local_snip, Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled("  [MISMATCH ✗]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        ]));
+        if let Some(leaf) = &app.tampered_leaf {
+            lines.push(Line::from(vec![
+                Span::styled("Tampered Leaf: ", Style::default().fg(Color::Yellow)),
+                Span::styled(leaf, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!(" (field: {})", app.tampered_field.as_deref().unwrap_or("title")),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]));
+        }
+        lines.push(Line::from(vec![
+            Span::styled("Integrity:     ", key_style),
+            Span::styled("FAILED (Cryptographic tamper detected)", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        ]));
     } else {
-        Span::styled("100% Cryptographic Match ✓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
-    };
-    lines.push(Line::from(vec![
-        Span::styled("Integrity: ", key_style),
-        match_status,
-    ]));
+        lines.push(Line::from(vec![
+            Span::styled("Local Root:    ", key_style),
+            Span::styled(local_snip, Style::default().fg(Color::Cyan)),
+            Span::styled("  [MATCH ✓]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Integrity:     ", key_style),
+            Span::styled("100% Cryptographic Match ✓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        ]));
+    }
 
     frame.render_widget(Paragraph::new(lines), rows[0]);
 
@@ -1663,30 +1718,78 @@ fn render_tab_evidence(frame: &mut Frame, area: Rect, app: &App) {
 
     let cols = Layout::horizontal([Constraint::Percentage(55), Constraint::Percentage(45)]).split(rows[1]);
 
-    let tree_lines = vec![
+    let is_tampered = app.status == AppStatus::Tampered;
+
+    let mut tree_lines = vec![
         Line::from(Span::styled("MERKLE TREE TOPOLOGY", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(vec![
+    ];
+
+    if is_tampered {
+        tree_lines.push(Line::from(vec![
+            Span::styled("Local Root: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                if app.evidence_root == "--" { "--" } else { &app.evidence_root[..app.evidence_root.len().min(24)] },
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [MISMATCH ✗]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        ]));
+        tree_lines.push(Line::from(vec![
+            Span::styled("Chain Root: ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                if app.chain_root == "--" { "--" } else { &app.chain_root[..app.chain_root.len().min(24)] },
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [ANCHORED ✓]", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        ]));
+        tree_lines.push(Line::from("├── Leaf 0 [IMAGE]      SHA-256 Digest of candidate image ✓"));
+        tree_lines.push(Line::from(vec![
+            Span::styled("├── Leaf 1 [CONTENT]    Canonical title & snippet text ", Style::default().fg(Color::Yellow)),
+            Span::styled("✗ [TAMPERED - title altered]", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+        ]));
+        tree_lines.push(Line::from("├── Leaf 2 [METADATA]   Domain, URL & retrieval timestamp ✓"));
+        tree_lines.push(Line::from("├── Leaf 3 [FACE]       Biometric embedding similarity & quality ✓"));
+        tree_lines.push(Line::from("└── Leaf 4 [PROVENANCE] Run ID, provider & schema version ✓"));
+    } else {
+        tree_lines.push(Line::from(vec![
             Span::styled("Root Hash: ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
             Span::styled(
                 if app.evidence_root == "--" { "--" } else { &app.evidence_root[..app.evidence_root.len().min(24)] },
                 Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ),
-        ]),
-        Line::from("├── Leaf 0 [IMAGE]      SHA-256 Digest of candidate image"),
-        Line::from("├── Leaf 1 [CONTENT]    Canonical title & snippet text"),
-        Line::from("├── Leaf 2 [METADATA]   Domain, URL & retrieval timestamp"),
-        Line::from("├── Leaf 3 [FACE]       Biometric embedding similarity & quality"),
-        Line::from("└── Leaf 4 [PROVENANCE] Run ID, provider & schema version"),
-    ];
+        ]));
+        tree_lines.push(Line::from("├── Leaf 0 [IMAGE]      SHA-256 Digest of candidate image"));
+        tree_lines.push(Line::from("├── Leaf 1 [CONTENT]    Canonical title & snippet text"));
+        tree_lines.push(Line::from("├── Leaf 2 [METADATA]   Domain, URL & retrieval timestamp"));
+        tree_lines.push(Line::from("├── Leaf 3 [FACE]       Biometric embedding similarity & quality"));
+        tree_lines.push(Line::from("└── Leaf 4 [PROVENANCE] Run ID, provider & schema version"));
+    }
     frame.render_widget(Paragraph::new(tree_lines), cols[0]);
+
+    let title_display = if is_tampered {
+        Span::styled(
+            "Modified photograph [UNAUTHORIZED ALTERATION]",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled("Original photograph", val_style)
+    };
+
+    let status_display = if is_tampered {
+        Span::styled("TAMPER DETECTED ✗ (Hash Mismatch)", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+    } else if app.evidence_root == "--" {
+        Span::styled("Pending assembly", val_style)
+    } else {
+        Span::styled("Assembled & Validated ✓", Style::default().fg(Color::Green))
+    };
 
     let record_lines = vec![
         Line::from(Span::styled("CANONICAL RECORD", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
         Line::from(vec![Span::styled("Run ID: ", key_style), Span::styled("demo-run-001", val_style)]),
+        Line::from(vec![Span::styled("Title: ", key_style), title_display]),
         Line::from(vec![Span::styled("Model: ", key_style), Span::styled("insightface-arcface-r100", val_style)]),
         Line::from(vec![Span::styled("Format: ", key_style), Span::styled("RFC 8785 Canonical JSON", val_style)]),
         Line::from(vec![Span::styled("Auditability: ", key_style), Span::styled("Zero-Knowledge Merkle Path", Style::default().fg(Color::Green))]),
-        Line::from(vec![Span::styled("Status: ", key_style), Span::styled(if app.evidence_root == "--" { "Pending assembly" } else { "Assembled & Validated ✓" }, Style::default().fg(Color::Green))]),
+        Line::from(vec![Span::styled("Status: ", key_style), status_display]),
     ];
     frame.render_widget(Paragraph::new(record_lines), cols[1]);
 
