@@ -123,7 +123,8 @@ mod tests {
     fn test_changed_image_produces_changed_hash() {
         let rec_orig = sample_record();
         let mut rec_mod = sample_record();
-        rec_mod.image_sha256 = "1111111111111111111111111111111111111111111111111111111111111111".to_string();
+        rec_mod.image_sha256 =
+            "1111111111111111111111111111111111111111111111111111111111111111".to_string();
 
         let orig_hashes = rec_orig.compute_hashes().unwrap();
         let mod_hashes = rec_mod.compute_hashes().unwrap();
@@ -198,7 +199,10 @@ mod tests {
         rec_decomposed.title = "cafe\u{0301}".to_string();
 
         // Raw Rust strings have different byte lengths and contents
-        assert_ne!(rec_precomposed.title.as_bytes(), rec_decomposed.title.as_bytes());
+        assert_ne!(
+            rec_precomposed.title.as_bytes(),
+            rec_decomposed.title.as_bytes()
+        );
 
         let hashes1 = rec_precomposed.compute_hashes().unwrap();
         let hashes2 = rec_decomposed.compute_hashes().unwrap();
@@ -217,10 +221,12 @@ mod tests {
     #[test]
     fn test_url_normalization_handles_default_ports_fragments_and_query_order() {
         let mut rec1 = sample_record();
-        rec1.source_url = Url::parse("https://example.com:443/search?b=2&a=1#first_fragment").unwrap();
+        rec1.source_url =
+            Url::parse("https://example.com:443/search?b=2&a=1#first_fragment").unwrap();
 
         let mut rec2 = sample_record();
-        rec2.source_url = Url::parse("https://example.com/search?a=1&b=2#different_fragment").unwrap();
+        rec2.source_url =
+            Url::parse("https://example.com/search?a=1&b=2#different_fragment").unwrap();
 
         let hashes1 = rec1.compute_hashes().unwrap();
         let hashes2 = rec2.compute_hashes().unwrap();
@@ -238,14 +244,20 @@ mod tests {
         rec_nan.face_similarity = f32::NAN;
         assert!(matches!(
             rec_nan.compute_hashes(),
-            Err(EvidenceError::NonFiniteFloat { field: "face_similarity", .. })
+            Err(EvidenceError::NonFiniteFloat {
+                field: "face_similarity",
+                ..
+            })
         ));
 
         let mut rec_inf = sample_record();
         rec_inf.candidate_quality = f32::INFINITY;
         assert!(matches!(
             rec_inf.compute_hashes(),
-            Err(EvidenceError::NonFiniteFloat { field: "candidate_quality", .. })
+            Err(EvidenceError::NonFiniteFloat {
+                field: "candidate_quality",
+                ..
+            })
         ));
     }
 
@@ -267,8 +279,8 @@ mod tests {
             EvidenceEngine, SearchCandidate, VerificationResult, VerificationStatus,
         };
 
-        let engine = DeterministicEvidenceEngine::new("run-xyz", "adaface-ir101")
-            .with_platform("web");
+        let engine =
+            DeterministicEvidenceEngine::new("run-xyz", "adaface-ir101").with_platform("web");
 
         let candidate = SearchCandidate {
             url: Url::parse("https://example.com/profile").unwrap(),
@@ -336,7 +348,8 @@ mod tests {
         // Mutate each leaf independently and verify root changes
         for i in 0..5 {
             let mut modified = base_leaves.clone();
-            modified[i] = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string();
+            modified[i] =
+                "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string();
             let mod_root = recompute_root(&modified).unwrap();
             assert_ne!(
                 base_root, mod_root,
@@ -393,10 +406,10 @@ mod tests {
         ];
         let tree = EvidenceTree::from_leaves(leaves.clone()).unwrap();
 
-        for i in 0..leaves.len() {
+        for (i, leaf) in leaves.iter().enumerate() {
             let proof = tree.generate_proof(i).unwrap();
             assert_eq!(proof.leaf_index, i);
-            assert_eq!(proof.leaf_hash, leaves[i]);
+            assert_eq!(&proof.leaf_hash, leaf);
             assert_eq!(proof.root_hash, tree.root_hash());
 
             assert!(
@@ -434,7 +447,8 @@ mod tests {
 
         // 2. Modifying root hash
         let mut tampered_root = original_proof.clone();
-        tampered_root.root_hash = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+        tampered_root.root_hash =
+            "0000000000000000000000000000000000000000000000000000000000000000".to_string();
         assert!(
             !verify_proof(&tampered_root),
             "verification must fail when root hash is modified"

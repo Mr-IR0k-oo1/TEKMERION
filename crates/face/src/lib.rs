@@ -14,8 +14,7 @@ pub use client::{FaceWorker, FaceWorkerConfig};
 pub use error::FaceWorkerError;
 pub use protocol::{WorkerFace, WorkerPose, WorkerResponse};
 pub use quality::{
-    assess_face, assess_face_quality, calculate_blur_variance, calculate_brightness,
-    BlurEstimate, BlurLevel, ExposureEstimate, ExposureLevel, FaceBoundingBox,
-    FaceQualityAssessment, OcclusionIndicators, PoseEstimate, QualityInput, QualityStatus,
-    QualityThresholds,
+    assess_face, assess_face_quality, calculate_blur_variance, calculate_brightness, BlurEstimate,
+    BlurLevel, ExposureEstimate, ExposureLevel, FaceBoundingBox, FaceQualityAssessment,
+    OcclusionIndicators, PoseEstimate, QualityInput, QualityStatus, QualityThresholds,
 };

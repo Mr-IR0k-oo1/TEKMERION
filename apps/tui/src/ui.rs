@@ -44,8 +44,7 @@ pub fn render(frame: &mut Frame, app: &App) {
 
     // Give the stages panel fixed width (28 cols is optimal for label + marker + padding)
     // and let the detail pane expand into the remaining width.
-    let middle = Layout::horizontal([Constraint::Length(28), Constraint::Fill(1)])
-        .split(chunks[1]);
+    let middle = Layout::horizontal([Constraint::Length(28), Constraint::Fill(1)]).split(chunks[1]);
     render_stages(frame, middle[0], app);
     render_detail(frame, middle[1], app);
 
@@ -58,7 +57,9 @@ fn render_too_small(frame: &mut Frame, area: Rect) {
         Line::from(""),
         Line::from(Span::styled(
             "Terminal window is too small for Tekmerion TUI",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
         Line::from(Span::styled(
@@ -134,7 +135,12 @@ fn stage_line(idx: usize, stage: Stage, app: &App) -> Line<'_> {
             marker,
             Span::raw(" "),
             Span::styled(format!("{:<13}", label), label_style),
-            Span::styled(" [ACTIVE]", Style::default().fg(Color::Yellow).add_modifier(Modifier::DIM)),
+            Span::styled(
+                " [ACTIVE]",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::DIM),
+            ),
         ])
     } else {
         Line::from(vec![
@@ -162,15 +168,15 @@ fn stage_marker(idx: usize, stage: Stage, app: &App) -> (Span<'static>, Style) {
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             ),
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         )
     } else if app.status == AppStatus::Tampered && app.current == Some(stage) {
         (
             Span::styled(
                 "✖",
-                Style::default()
-                    .fg(Color::Red)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             ),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         )
@@ -195,21 +201,33 @@ fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
         .unwrap_or_else(FaceQualityAssessment::sample_good);
 
     let status_style = match quality.status {
-        QualityStatus::Good => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-        QualityStatus::Warning => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        QualityStatus::Good => Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+        QualityStatus::Warning => Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
         QualityStatus::Reject => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
     };
 
     let blur_style = match quality.blur.level {
-        BlurLevel::Low => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-        BlurLevel::Medium => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        BlurLevel::Low => Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+        BlurLevel::Medium => Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
         BlurLevel::High => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
     };
 
     let quality_style = if quality.overall_quality >= 0.75 {
-        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD)
     } else if quality.overall_quality >= 0.50 {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
     };
@@ -220,7 +238,10 @@ fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .title(Line::from(vec![
             Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
-            Span::styled("FACE QUALITY", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "FACE QUALITY",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" "),
         ]))
         .borders(Borders::ALL)
@@ -234,7 +255,9 @@ fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
         let lines = vec![
             Line::from(Span::styled(
                 "FACE QUALITY",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(""),
             Line::from(Span::styled("Faces:", key_style)),
@@ -266,7 +289,9 @@ fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
 
         let header = Paragraph::new(Line::from(Span::styled(
             "FACE QUALITY",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         )));
         frame.render_widget(header, rows[0]);
 
@@ -282,7 +307,10 @@ fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
             left_lines.push(Line::from(""));
         }
         left_lines.push(Line::from(Span::styled("Resolution:", key_style)));
-        left_lines.push(Line::from(Span::styled(quality.resolution_display(), val_style)));
+        left_lines.push(Line::from(Span::styled(
+            quality.resolution_display(),
+            val_style,
+        )));
         if spaced {
             left_lines.push(Line::from(""));
         }
@@ -296,12 +324,18 @@ fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
             right_lines.push(Line::from(""));
         }
         right_lines.push(Line::from(Span::styled("Quality:", key_style)));
-        right_lines.push(Line::from(Span::styled(quality.quality_display(), quality_style)));
+        right_lines.push(Line::from(Span::styled(
+            quality.quality_display(),
+            quality_style,
+        )));
         if spaced {
             right_lines.push(Line::from(""));
         }
         right_lines.push(Line::from(Span::styled("Status:", key_style)));
-        right_lines.push(Line::from(Span::styled(quality.status_display(), status_style)));
+        right_lines.push(Line::from(Span::styled(
+            quality.status_display(),
+            status_style,
+        )));
 
         frame.render_widget(Paragraph::new(left_lines), cols[0]);
         frame.render_widget(Paragraph::new(right_lines), cols[1]);
@@ -313,11 +347,7 @@ fn render_face_quality(frame: &mut Frame, area: Rect, app: &App) {
 fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
     let is_failure = app.discovery_error.is_some() || app.discovery_request_status == "FAILED";
 
-    let border_color = if is_failure {
-        Color::Red
-    } else {
-        Color::Cyan
-    };
+    let border_color = if is_failure { Color::Red } else { Color::Cyan };
 
     let block = Block::default()
         .title(Line::from(vec![
@@ -337,7 +367,9 @@ fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
     let req_style = if is_failure {
         Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD)
     };
 
     if inner.height >= 14 {
@@ -345,7 +377,9 @@ fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
         let mut lines = vec![
             Line::from(Span::styled(
                 "DISCOVERY",
-                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(border_color)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(""),
             Line::from(Span::styled("Provider:", key_style)),
@@ -355,10 +389,16 @@ fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
             Line::from(Span::styled(&app.discovery_request_status, req_style)),
             Line::from(""),
             Line::from(Span::styled("Candidates:", key_style)),
-            Line::from(Span::styled(format!("{}", app.discovery_raw_count), val_style)),
+            Line::from(Span::styled(
+                format!("{}", app.discovery_raw_count),
+                val_style,
+            )),
             Line::from(""),
             Line::from(Span::styled("Unique:", key_style)),
-            Line::from(Span::styled(format!("{}", app.discovery_unique_count), val_style)),
+            Line::from(Span::styled(
+                format!("{}", app.discovery_unique_count),
+                val_style,
+            )),
         ];
 
         if let Some(err) = &app.discovery_error {
@@ -388,7 +428,9 @@ fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
         let left_lines = vec![
             Line::from(Span::styled(
                 "DISCOVERY",
-                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(border_color)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(Span::styled("Provider:", key_style)),
             Line::from(Span::styled(&app.discovery_provider, val_style)),
@@ -399,9 +441,15 @@ fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
         let right_lines = vec![
             Line::from(""),
             Line::from(Span::styled("Candidates:", key_style)),
-            Line::from(Span::styled(format!("{}", app.discovery_raw_count), val_style)),
+            Line::from(Span::styled(
+                format!("{}", app.discovery_raw_count),
+                val_style,
+            )),
             Line::from(Span::styled("Unique:", key_style)),
-            Line::from(Span::styled(format!("{}", app.discovery_unique_count), val_style)),
+            Line::from(Span::styled(
+                format!("{}", app.discovery_unique_count),
+                val_style,
+            )),
         ];
 
         let err_lines = vec![
@@ -423,16 +471,24 @@ fn render_discovery(frame: &mut Frame, area: Rect, app: &App) {
         let lines = vec![
             Line::from(Span::styled(
                 "DISCOVERY",
-                Style::default().fg(border_color).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(border_color)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(Span::styled("Provider:", key_style)),
             Line::from(Span::styled(&app.discovery_provider, val_style)),
             Line::from(Span::styled("Request:", key_style)),
             Line::from(Span::styled(&app.discovery_request_status, req_style)),
             Line::from(Span::styled("Candidates:", key_style)),
-            Line::from(Span::styled(format!("{}", app.discovery_raw_count), val_style)),
+            Line::from(Span::styled(
+                format!("{}", app.discovery_raw_count),
+                val_style,
+            )),
             Line::from(Span::styled("Unique:", key_style)),
-            Line::from(Span::styled(format!("{}", app.discovery_unique_count), val_style)),
+            Line::from(Span::styled(
+                format!("{}", app.discovery_unique_count),
+                val_style,
+            )),
         ];
 
         frame.render_widget(Paragraph::new(lines), inner);
@@ -445,7 +501,10 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .title(Line::from(vec![
             Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
-            Span::styled("CANDIDATE VERIFICATION & RANKING", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "CANDIDATE VERIFICATION & RANKING",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" "),
         ]))
         .borders(Borders::ALL)
@@ -467,7 +526,9 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
             Line::from(""),
             Line::from(Span::styled(
                 "  No candidates verified yet.",
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::ITALIC),
             )),
             Line::from(Span::styled(
                 "  Advance through pipeline stages or press [V] to verify candidates.",
@@ -502,17 +563,26 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
             Span::styled(" Candidates: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 format!("{total_count}"),
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled("  │  Verified: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 format!("{verified_count}"),
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled("  │  Threshold: ", Style::default().fg(Color::DarkGray)),
             Span::styled("≥ 0.75", Style::default().fg(Color::Cyan)),
             Span::styled("  │  Use ", Style::default().fg(Color::DarkGray)),
-            Span::styled("↑/↓", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "↑/↓",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" to inspect", Style::default().fg(Color::DarkGray)),
         ]);
         frame.render_widget(Paragraph::new(summary_line), rows[0]);
@@ -651,9 +721,7 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
                 ),
                 VerificationStatus::Error => (
                     "ERROR",
-                    Style::default()
-                        .fg(Color::Red)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                 ),
             };
             let status_span = Span::styled(status_text, status_style);
@@ -681,7 +749,9 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled(" Selected Candidate #", Style::default().fg(Color::Cyan)),
                 Span::styled(
                     format!("{}", selected_cand.rank),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" "),
             ]));
@@ -701,15 +771,15 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
         };
 
         let status_style = match selected_cand.status() {
-            VerificationStatus::Verified => {
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
-            }
-            VerificationStatus::BelowThreshold => {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            }
-            VerificationStatus::NoFace => {
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)
-            }
+            VerificationStatus::Verified => Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+            VerificationStatus::BelowThreshold => Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+            VerificationStatus::NoFace => Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
             VerificationStatus::Error => {
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
             }
@@ -728,12 +798,16 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
                 Span::styled("RANK: ", key_style),
                 Span::styled(
                     format!("#{:<3}", selected_cand.rank),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled("SCORE: ", key_style),
                 Span::styled(
                     format!("{:<6.4} ", selected_cand.ranking_score),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled("QUALITY: ", key_style),
                 Span::styled(format!("{:<4.2}", selected_cand.quality_score), val_style),
@@ -750,7 +824,10 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
                     format!("{:.2} (Sim:) ", selected_cand.face_similarity),
                     val_style,
                 ),
-                Span::styled(format!("{:<8} ", face_str), Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    format!("{:<8} ", face_str),
+                    Style::default().fg(Color::Cyan),
+                ),
                 Span::styled(hash_display, Style::default().fg(Color::Cyan)),
             ]),
         ];
@@ -782,7 +859,10 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
 
             list_lines.push(Line::from(vec![
                 Span::styled(cursor, Style::default().fg(Color::Yellow)),
-                Span::styled(format!("#{:<3} ", cand.rank), Style::default().fg(Color::White)),
+                Span::styled(
+                    format!("#{:<3} ", cand.rank),
+                    Style::default().fg(Color::White),
+                ),
                 Span::styled(
                     format!("{:<10} ", &cand.source()[..cand.source().len().min(10)]),
                     Style::default().fg(Color::Gray),
@@ -797,11 +877,15 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
                 ),
                 Span::styled(
                     format!("{:<6.2} ", cand.ranking_score),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     status_str,
-                    Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(status_color)
+                        .add_modifier(Modifier::BOLD),
                 ),
             ]));
         }
@@ -810,6 +894,65 @@ fn render_candidate_verification(frame: &mut Frame, area: Rect, app: &App) {
     }
 
     frame.render_widget(block, area);
+}
+
+fn render_evidence_tree(frame: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default()
+        .title(Line::from(vec![
+            Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
+            Span::styled(
+                "EVIDENCE TREE",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" "),
+        ]))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let key_style = Style::default().fg(Color::White);
+    let check_style = Style::default()
+        .fg(Color::Green)
+        .add_modifier(Modifier::BOLD);
+    let root_label_style = Style::default().fg(Color::DarkGray);
+    let root_val_style = Style::default()
+        .fg(Color::Yellow)
+        .add_modifier(Modifier::BOLD);
+
+    let lines = vec![
+        Line::from(Span::styled(
+            "EVIDENCE TREE",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "IMAGE"), key_style),
+            Span::styled("✓", check_style),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "CONTENT"), key_style),
+            Span::styled("✓", check_style),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "METADATA"), key_style),
+            Span::styled("✓", check_style),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "FACE"), key_style),
+            Span::styled("✓", check_style),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("{:<15}", "PROVENANCE"), key_style),
+            Span::styled("✓", check_style),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("ROOT", root_label_style)),
+        Line::from(Span::styled(app.evidence_root.as_str(), root_val_style)),
+    ];
+
+    frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
 fn render_detail(frame: &mut Frame, area: Rect, app: &App) {
@@ -825,6 +968,11 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App) {
 
     if app.current == Some(Stage::Verify) {
         render_candidate_verification(frame, area, app);
+        return;
+    }
+
+    if app.current == Some(Stage::Evidence) {
+        render_evidence_tree(frame, area, app);
         return;
     }
 
@@ -863,9 +1011,7 @@ fn render_detail(frame: &mut Frame, area: Rect, app: &App) {
         "verified" => Style::default()
             .fg(Color::Green)
             .add_modifier(Modifier::BOLD),
-        "tampered" => Style::default()
-            .fg(Color::Red)
-            .add_modifier(Modifier::BOLD),
+        "tampered" => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         _ => Style::default().fg(Color::DarkGray),
     };
 
@@ -963,7 +1109,10 @@ fn render_events(frame: &mut Frame, area: Rect, app: &App) {
     let block = Block::default()
         .title(Line::from(vec![
             Span::styled(" ◈ ", Style::default().fg(Color::Cyan)),
-            Span::styled("RECENT EVENTS", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "RECENT EVENTS",
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" "),
         ]))
         .borders(Borders::ALL)
@@ -994,13 +1143,21 @@ fn render_events(frame: &mut Frame, area: Rect, app: &App) {
         .skip(skip)
         .map(|event| {
             let (icon, icon_style) = if event.contains("verified") {
-                ("★ ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                (
+                    "★ ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else if event.contains("complete") {
                 ("✓ ", Style::default().fg(Color::Green))
             } else if event.contains("started") {
                 ("▶ ", Style::default().fg(Color::Cyan))
             } else if event.contains("Tamper") {
-                ("✖ ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                (
+                    "✖ ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                )
             } else if event.contains("reset") {
                 ("↺ ", Style::default().fg(Color::Yellow))
             } else {

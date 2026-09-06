@@ -193,12 +193,12 @@ impl DiscoveryProvider for ExternalReverseImageProvider {
             });
         }
 
-        let image_bytes = tokio::fs::read(path).await.map_err(|e| {
-            DiscoveryError::Provider {
+        let image_bytes = tokio::fs::read(path)
+            .await
+            .map_err(|e| DiscoveryError::Provider {
                 provider: self.id().to_string(),
                 message: format!("failed to read image file '{}': {}", image_path, e),
-            }
-        })?;
+            })?;
 
         if image_bytes.is_empty() {
             return Err(DiscoveryError::Provider {
@@ -213,7 +213,13 @@ impl DiscoveryProvider for ExternalReverseImageProvider {
             .unwrap_or("face.jpg")
             .to_string();
 
-        let mime_type = match path.extension().and_then(|s| s.to_str()).unwrap_or("jpg").to_ascii_lowercase().as_str() {
+        let mime_type = match path
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("jpg")
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "png" => "image/png",
             "webp" => "image/webp",
             "gif" => "image/gif",
@@ -301,19 +307,23 @@ impl DiscoveryProvider for ExternalReverseImageProvider {
             };
             return Err(DiscoveryError::Provider {
                 provider: self.id().to_string(),
-                message: format!("Upstream search request returned HTTP {}: {}", status, snippet),
+                message: format!(
+                    "Upstream search request returned HTTP {}: {}",
+                    status, snippet
+                ),
             });
         }
 
-        let body: Value = response.json().await.map_err(|e| {
-            DiscoveryError::Provider {
+        let body: Value = response
+            .json()
+            .await
+            .map_err(|e| DiscoveryError::Provider {
                 provider: self.id().to_string(),
                 message: format!(
                     "Failed to parse upstream JSON response: {}",
                     redact_secrets(&e.to_string(), &self.config.api_key)
                 ),
-            }
-        })?;
+            })?;
 
         let raw_candidates = extract_candidates_from_response(&body);
 
@@ -378,7 +388,17 @@ fn extract_single_candidate(item: &Value) -> Option<RawCandidate> {
     let obj = item.as_object()?;
 
     // Dynamic URL extraction
-    let url = get_str_by_keys(obj, &["link", "url", "source_url", "page_url", "target_url", "link_url"])?;
+    let url = get_str_by_keys(
+        obj,
+        &[
+            "link",
+            "url",
+            "source_url",
+            "page_url",
+            "target_url",
+            "link_url",
+        ],
+    )?;
     if url.trim().is_empty() {
         return None;
     }
@@ -396,7 +416,9 @@ fn extract_single_candidate(item: &Value) -> Option<RawCandidate> {
     }
 
     // Dynamic full image URL extraction
-    if let Some(image_url) = get_str_by_keys(obj, &["image", "original_image", "full_image", "image_url"]) {
+    if let Some(image_url) =
+        get_str_by_keys(obj, &["image", "original_image", "full_image", "image_url"])
+    {
         candidate = candidate.with_image_url(image_url);
     }
 
@@ -406,7 +428,10 @@ fn extract_single_candidate(item: &Value) -> Option<RawCandidate> {
     }
 
     // Dynamic snippet / caption extraction
-    if let Some(snippet) = get_str_by_keys(obj, &["snippet", "description", "text", "caption", "summary"]) {
+    if let Some(snippet) = get_str_by_keys(
+        obj,
+        &["snippet", "description", "text", "caption", "summary"],
+    ) {
         candidate = candidate.with_snippet(snippet);
     }
 

@@ -41,7 +41,9 @@ pub enum DownloadError {
     InsecureScheme { url: String },
 
     /// Image size exceeded the configured maximum limit.
-    #[error("download size exceeded limit of {limit_bytes} bytes (received: {actual_bytes:?} bytes)")]
+    #[error(
+        "download size exceeded limit of {limit_bytes} bytes (received: {actual_bytes:?} bytes)"
+    )]
     Oversized {
         limit_bytes: usize,
         actual_bytes: Option<usize>,
@@ -259,21 +261,16 @@ impl ImageDownloader {
     }
 
     async fn download_internal(&self, url: &Url) -> Result<DownloadedImage, DownloadError> {
-        let response = self
-            .client
-            .get(url.clone())
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    DownloadError::Timeout {
-                        url: url.to_string(),
-                        timeout_ms: self.config.timeout.as_millis() as u64,
-                    }
-                } else {
-                    DownloadError::Internal(e.to_string())
+        let response = self.client.get(url.clone()).send().await.map_err(|e| {
+            if e.is_timeout() {
+                DownloadError::Timeout {
+                    url: url.to_string(),
+                    timeout_ms: self.config.timeout.as_millis() as u64,
                 }
-            })?;
+            } else {
+                DownloadError::Internal(e.to_string())
+            }
+        })?;
 
         let status = response.status();
         if !status.is_success() {
@@ -296,7 +293,12 @@ impl ImageDownloader {
             .trim()
             .to_ascii_lowercase();
 
-        if !self.config.allowed_content_types.iter().any(|ct| ct == &content_type) {
+        if !self
+            .config
+            .allowed_content_types
+            .iter()
+            .any(|ct| ct == &content_type)
+        {
             return Err(DownloadError::UnsupportedContentType {
                 content_type,
                 allowed: self.config.allowed_content_types.clone(),
@@ -314,12 +316,12 @@ impl ImageDownloader {
         }
 
         // 3. Prepare Safe Temporary Destination
-        tokio::fs::create_dir_all(&self.config.temp_dir).await.map_err(|e| {
-            DownloadError::Io {
+        tokio::fs::create_dir_all(&self.config.temp_dir)
+            .await
+            .map_err(|e| DownloadError::Io {
                 path: self.config.temp_dir.display().to_string(),
                 message: format!("failed to create temp download dir: {}", e),
-            }
-        })?;
+            })?;
 
         let extension = match content_type.as_str() {
             "image/jpeg" | "image/jpg" => "jpg",
@@ -336,7 +338,13 @@ impl ImageDownloader {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let filename = format!("candidate_{}_{}_{:06}.{}", timestamp, std::process::id(), unique_id, extension);
+        let filename = format!(
+            "candidate_{}_{}_{:06}.{}",
+            timestamp,
+            std::process::id(),
+            unique_id,
+            extension
+        );
         let dest_path = self.config.temp_dir.join(filename);
 
         async fn delete_if_exists(path: &Path) {
@@ -486,7 +494,10 @@ pub fn validate_magic_bytes(bytes: &[u8], content_type: &str) -> Result<(), Down
 
     // 5. HTML / XML / JavaScript documents disguised as images
     let prefix_str = String::from_utf8_lossy(&bytes[..bytes.len().min(64)]).to_ascii_lowercase();
-    if prefix_str.starts_with("<!doctype") || prefix_str.starts_with("<html") || prefix_str.starts_with("<script") {
+    if prefix_str.starts_with("<!doctype")
+        || prefix_str.starts_with("<html")
+        || prefix_str.starts_with("<script")
+    {
         return Err(DownloadError::ExecutableDetected {
             signature: "HTML or Script document".to_string(),
         });
@@ -524,12 +535,10 @@ pub fn validate_magic_bytes(bytes: &[u8], content_type: &str) -> Result<(), Down
                 });
             }
         }
-        "image/bmp" | "image/x-ms-bmp" => {
-            if !bytes.starts_with(b"BM") {
-                return Err(DownloadError::InvalidImageFormat {
-                    reason: "BMP magic bytes mismatch (expected BM)".to_string(),
-                });
-            }
+        "image/bmp" | "image/x-ms-bmp" if !bytes.starts_with(b"BM") => {
+            return Err(DownloadError::InvalidImageFormat {
+                reason: "BMP magic bytes mismatch (expected BM)".to_string(),
+            });
         }
         _ => {
             // Permitted types without explicit magic bytes check (e.g. avif) pass if not executable
@@ -550,7 +559,8 @@ mod tests {
 
     // Synthetic valid PNG header + data
     pub const VALID_PNG: [u8; 16] = [
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44,
+        0x52,
     ];
 
     async fn start_mock_server(
@@ -618,7 +628,7 @@ mod tests {
 
         // Verify SHA-256 matches actual byte hash
         let mut hasher = Sha256::new();
-        hasher.update(&VALID_JPEG);
+        hasher.update(VALID_JPEG);
         let expected_sha256 = hex::encode(hasher.finalize());
         assert_eq!(downloaded.sha256, expected_sha256);
 
@@ -650,7 +660,7 @@ mod tests {
         assert_eq!(downloaded.content_type, "image/png");
 
         let mut hasher = Sha256::new();
-        hasher.update(&VALID_PNG);
+        hasher.update(VALID_PNG);
         let expected_sha256 = hex::encode(hasher.finalize());
         assert_eq!(downloaded.sha256, expected_sha256);
     }
@@ -676,7 +686,10 @@ mod tests {
 
         let err = downloader.download(&url).await.unwrap_err();
         match err {
-            DownloadError::Oversized { limit_bytes, actual_bytes } => {
+            DownloadError::Oversized {
+                limit_bytes,
+                actual_bytes,
+            } => {
                 assert_eq!(limit_bytes, 1000);
                 assert!(actual_bytes.unwrap() > 1000);
             }
@@ -776,7 +789,10 @@ mod tests {
         let err1 = downloader.download("not a valid url").await.unwrap_err();
         assert!(matches!(err1, DownloadError::InvalidUrl { .. }));
 
-        let err2 = downloader.download("ftp://example.com/pic.jpg").await.unwrap_err();
+        let err2 = downloader
+            .download("ftp://example.com/pic.jpg")
+            .await
+            .unwrap_err();
         assert!(matches!(err2, DownloadError::InvalidUrl { .. }));
     }
 
@@ -785,7 +801,10 @@ mod tests {
         let config = DownloaderConfig::default().with_require_https(true);
         let downloader = ImageDownloader::with_config(config).unwrap();
 
-        let err = downloader.download("http://example.com/pic.jpg").await.unwrap_err();
+        let err = downloader
+            .download("http://example.com/pic.jpg")
+            .await
+            .unwrap_err();
         assert!(matches!(err, DownloadError::InsecureScheme { .. }));
     }
 }

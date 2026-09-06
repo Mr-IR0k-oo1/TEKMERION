@@ -153,7 +153,6 @@ impl VerificationStatus {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvidenceRecord {
     pub schema_version: String,
@@ -237,11 +236,13 @@ mod tests {
 
     #[test]
     fn verification_status_variants() {
-        assert_ne!(VerificationStatus::Verified, VerificationStatus::BelowThreshold);
+        assert_ne!(
+            VerificationStatus::Verified,
+            VerificationStatus::BelowThreshold
+        );
         assert_eq!(VerificationStatus::NoFace, VerificationStatus::NoFace);
         assert_eq!(VerificationStatus::Verified.label(), "Verified");
         assert!(VerificationStatus::Verified.is_verified());
         assert!(!VerificationStatus::BelowThreshold.is_verified());
     }
 }
-

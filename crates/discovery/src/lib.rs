@@ -23,7 +23,9 @@ pub use external::{
     ExternalReverseImageProvider, DEFAULT_ENDPOINT, DEFAULT_IMAGE_FIELD, DEFAULT_PROVIDER_NAME,
     DEFAULT_TIMEOUT_SECONDS,
 };
-pub use normalizer::{normalize_candidate, normalize_domain, process_candidates, validate_and_normalize_url};
+pub use normalizer::{
+    normalize_candidate, normalize_domain, process_candidates, validate_and_normalize_url,
+};
 pub use provider::{DiscoveryProvider, RawCandidate};
 pub use retry::RetryPolicy;
 pub use tekmerion_core::SearchCandidate;
@@ -70,10 +72,7 @@ mod tests {
             .with_title("Sample Photo")
             .with_domain("photos.example.org");
 
-        let mock_provider = Arc::new(MockDiscoveryProvider::new(
-            "mock_search",
-            vec![raw1, raw2],
-        ));
+        let mock_provider = Arc::new(MockDiscoveryProvider::new("mock_search", vec![raw1, raw2]));
 
         let engine = DiscoveryEngine::new(
             vec![mock_provider.clone()],
@@ -100,17 +99,22 @@ mod tests {
             "https://images.example.com/face.jpg"
         );
         // Stripped fragment
-        assert_eq!(candidates[0].url.as_str(), "https://example.com/profile/123");
+        assert_eq!(
+            candidates[0].url.as_str(),
+            "https://example.com/profile/123"
+        );
 
         // Stripped port 80 for http
         assert_eq!(candidates[1].domain, "photos.example.org");
-        assert_eq!(candidates[1].url.as_str(), "http://photos.example.org/sample");
+        assert_eq!(
+            candidates[1].url.as_str(),
+            "http://photos.example.org/sample"
+        );
     }
 
     #[tokio::test]
     async fn engine_deduplicates_across_providers() {
-        let raw_a = RawCandidate::new("https://example.com/person/1")
-            .with_title("First Title");
+        let raw_a = RawCandidate::new("https://example.com/person/1").with_title("First Title");
         let raw_b = RawCandidate::new("https://example.com/person/1")
             .with_snippet("Complementary snippet")
             .with_image_url("https://example.com/img.jpg");
@@ -130,7 +134,10 @@ mod tests {
         // Must be deduplicated into 1 candidate with merged metadata
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].title.as_deref(), Some("First Title"));
-        assert_eq!(candidates[0].snippet.as_deref(), Some("Complementary snippet"));
+        assert_eq!(
+            candidates[0].snippet.as_deref(),
+            Some("Complementary snippet")
+        );
         assert!(candidates[0].image_url.is_some());
     }
 
@@ -138,7 +145,10 @@ mod tests {
     async fn engine_enforces_candidate_limit() {
         let mut raw_list = Vec::new();
         for i in 0..20 {
-            raw_list.push(RawCandidate::new(format!("https://example.com/entry/{:02}", i)));
+            raw_list.push(RawCandidate::new(format!(
+                "https://example.com/entry/{:02}",
+                i
+            )));
         }
 
         let provider = Arc::new(MockDiscoveryProvider::new("bulk", raw_list));
@@ -156,7 +166,10 @@ mod tests {
         let raw_a = RawCandidate::new("https://a.example.net/page").with_domain("a.example.net");
         let raw_b = RawCandidate::new("https://b.example.net/page").with_domain("b.example.net");
 
-        let provider = Arc::new(MockDiscoveryProvider::new("order_test", vec![raw_c, raw_a, raw_b]));
+        let provider = Arc::new(MockDiscoveryProvider::new(
+            "order_test",
+            vec![raw_c, raw_a, raw_b],
+        ));
         let engine = DiscoveryEngine::new(
             vec![provider],
             Arc::new(NoopCache),
@@ -185,7 +198,9 @@ mod tests {
         let engine = DiscoveryEngine::new(vec![provider], Arc::new(NoopCache), config).unwrap();
         let err = engine.discover(&sample_analysis()).await.unwrap_err();
 
-        assert!(matches!(err, DiscoveryError::Timeout { provider, .. } if provider == "slow_provider"));
+        assert!(
+            matches!(err, DiscoveryError::Timeout { provider, .. } if provider == "slow_provider")
+        );
     }
 
     #[tokio::test]
@@ -207,7 +222,8 @@ mod tests {
             backoff_factor: 1.5,
         });
 
-        let engine = DiscoveryEngine::new(vec![provider.clone()], Arc::new(NoopCache), config).unwrap();
+        let engine =
+            DiscoveryEngine::new(vec![provider.clone()], Arc::new(NoopCache), config).unwrap();
         let candidates = engine.discover(&sample_analysis()).await.unwrap();
 
         assert_eq!(candidates.len(), 1);
@@ -229,7 +245,8 @@ mod tests {
             backoff_factor: 2.0,
         });
 
-        let engine = DiscoveryEngine::new(vec![provider.clone()], Arc::new(NoopCache), config).unwrap();
+        let engine =
+            DiscoveryEngine::new(vec![provider.clone()], Arc::new(NoopCache), config).unwrap();
         let err = engine.discover(&sample_analysis()).await.unwrap_err();
 
         assert!(matches!(err, DiscoveryError::Config(_)));
@@ -337,7 +354,13 @@ mod tests {
 
         // Write a synthetic JPEG file for testing actual upload
         let temp_dir = std::env::temp_dir();
-        let image_file = temp_dir.join(format!("test_face_{}.jpg", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let image_file = temp_dir.join(format!(
+            "test_face_{}.jpg",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         let dummy_jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46];
         tokio::fs::write(&image_file, &dummy_jpeg).await.unwrap();
 
@@ -369,9 +392,18 @@ mod tests {
         assert_eq!(candidates[0].url, "https://example.com/target-profile");
         assert_eq!(candidates[0].title.as_deref(), Some("Jane Doe Public Page"));
         assert_eq!(candidates[0].domain.as_deref(), Some("example.com"));
-        assert_eq!(candidates[0].image_url.as_deref(), Some("https://example.com/full.jpg"));
-        assert_eq!(candidates[0].thumbnail_url.as_deref(), Some("https://example.com/thumb.jpg"));
-        assert_eq!(candidates[0].snippet.as_deref(), Some("Verified portrait photo"));
+        assert_eq!(
+            candidates[0].image_url.as_deref(),
+            Some("https://example.com/full.jpg")
+        );
+        assert_eq!(
+            candidates[0].thumbnail_url.as_deref(),
+            Some("https://example.com/thumb.jpg")
+        );
+        assert_eq!(
+            candidates[0].snippet.as_deref(),
+            Some("Verified portrait photo")
+        );
 
         // Clean up temp file
         let _ = tokio::fs::remove_file(&image_file).await;
@@ -392,7 +424,13 @@ mod tests {
         .await;
 
         let temp_dir = std::env::temp_dir();
-        let image_file = temp_dir.join(format!("test_face_{}.jpg", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let image_file = temp_dir.join(format!(
+            "test_face_{}.jpg",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         tokio::fs::write(&image_file, b"test").await.unwrap();
 
         let mut analysis = sample_analysis();
@@ -430,11 +468,22 @@ mod tests {
         use url::Url;
 
         let secret = "classified_api_token_xyz987";
-        let (endpoint_str, _req_rx) =
-            run_one_shot_server(401, "Unauthorized", &[], r#"{"error":"invalid credentials"}"#).await;
+        let (endpoint_str, _req_rx) = run_one_shot_server(
+            401,
+            "Unauthorized",
+            &[],
+            r#"{"error":"invalid credentials"}"#,
+        )
+        .await;
 
         let temp_dir = std::env::temp_dir();
-        let image_file = temp_dir.join(format!("test_face_{}.jpg", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let image_file = temp_dir.join(format!(
+            "test_face_{}.jpg",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         tokio::fs::write(&image_file, b"test").await.unwrap();
 
         let mut analysis = sample_analysis();
@@ -452,7 +501,10 @@ mod tests {
         let err = provider.search(&analysis).await.unwrap_err();
 
         let err_msg = err.to_string();
-        assert!(!err_msg.contains(secret), "Secret must never leak in error message");
+        assert!(
+            !err_msg.contains(secret),
+            "Secret must never leak in error message"
+        );
         assert!(err_msg.contains("Authentication failed"));
 
         let _ = tokio::fs::remove_file(&image_file).await;
@@ -482,4 +534,3 @@ mod tests {
         assert!(err.to_string().contains("does not exist"));
     }
 }
-

@@ -116,7 +116,10 @@ mod tests {
         let a = [1.0, 2.0, 3.0];
         let b = [10.0, 20.0, 30.0];
         let sim = cosine_similarity(&a, &b).unwrap();
-        assert!((sim - 1.0).abs() < 1e-6, "expected 1.0 for scaled vector, got {sim}");
+        assert!(
+            (sim - 1.0).abs() < 1e-6,
+            "expected 1.0 for scaled vector, got {sim}"
+        );
     }
 
     #[test]
@@ -125,7 +128,10 @@ mod tests {
         let a = [1.0, 0.0];
         let b = [0.5, (3.0f32).sqrt() / 2.0];
         let sim = cosine_similarity(&a, &b).unwrap();
-        assert!((sim - 0.5).abs() < 1e-6, "expected 0.5 for 60 deg angle, got {sim}");
+        assert!(
+            (sim - 0.5).abs() < 1e-6,
+            "expected 0.5 for 60 deg angle, got {sim}"
+        );
     }
 
     #[test]
@@ -134,7 +140,10 @@ mod tests {
         let b = [1.0, 2.0];
         let err = cosine_similarity(&a, &b).unwrap_err();
         match err {
-            SimilarityError::DimensionMismatch { query_dim, candidate_dim } => {
+            SimilarityError::DimensionMismatch {
+                query_dim,
+                candidate_dim,
+            } => {
                 assert_eq!(query_dim, 3);
                 assert_eq!(candidate_dim, 2);
             }
@@ -190,7 +199,7 @@ mod tests {
         let a = vec![1.0000001f32; 512];
         let b = vec![1.0000001f32; 512];
         let sim = cosine_similarity(&a, &b).unwrap();
-        assert!(sim >= -1.0 && sim <= 1.0);
+        assert!((-1.0..=1.0).contains(&sim));
         assert!((sim - 1.0).abs() < 1e-6);
     }
 }

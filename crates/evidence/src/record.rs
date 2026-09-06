@@ -114,6 +114,7 @@ pub struct EvidenceRecord {
 
 impl EvidenceRecord {
     /// Construct a new `EvidenceRecord` with explicit fields and default schema version `1.0.0`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         run_id: impl Into<String>,
         source_url: Url,
@@ -258,7 +259,8 @@ impl EvidenceRecord {
             normalize_utf8(self.domain.trim()).to_lowercase(),
             normalize_utf8(self.platform.trim()).to_lowercase(),
             normalize_utf8(self.provider.trim()),
-            self.retrieved_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            self.retrieved_at
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         ];
 
         for field in &fields {
@@ -310,7 +312,8 @@ impl EvidenceRecord {
             normalize_utf8(self.run_id.trim()),
             normalize_utf8(self.provider.trim()),
             normalize_utf8(self.platform.trim()).to_lowercase(),
-            self.retrieved_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            self.retrieved_at
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
         ];
 
         for field in &fields {
@@ -391,12 +394,22 @@ impl EvidenceRecord {
             ("run_id", normalize_utf8(self.run_id.trim())),
             ("source_url", normalize_url(&self.source_url)),
             ("domain", normalize_utf8(self.domain.trim()).to_lowercase()),
-            ("platform", normalize_utf8(self.platform.trim()).to_lowercase()),
+            (
+                "platform",
+                normalize_utf8(self.platform.trim()).to_lowercase(),
+            ),
             ("provider", normalize_utf8(self.provider.trim())),
-            ("retrieved_at", self.retrieved_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+            (
+                "retrieved_at",
+                self.retrieved_at
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            ),
             ("title", normalize_utf8(self.title.trim())),
             ("text", normalize_utf8(self.text.trim())),
-            ("image_sha256", normalize_utf8(self.image_sha256.trim()).to_lowercase()),
+            (
+                "image_sha256",
+                normalize_utf8(self.image_sha256.trim()).to_lowercase(),
+            ),
             ("face_similarity", sim_str),
             ("face_model", normalize_utf8(self.face_model.trim())),
             ("candidate_quality", qual_str),
@@ -423,18 +436,54 @@ impl EvidenceRecord {
 
         let mut map: BTreeMap<&'static str, serde_json::Value> = BTreeMap::new();
         map.insert("candidate_quality", serde_json::Value::String(qual_str));
-        map.insert("domain", serde_json::Value::String(normalize_utf8(self.domain.trim()).to_lowercase()));
-        map.insert("face_model", serde_json::Value::String(normalize_utf8(self.face_model.trim())));
+        map.insert(
+            "domain",
+            serde_json::Value::String(normalize_utf8(self.domain.trim()).to_lowercase()),
+        );
+        map.insert(
+            "face_model",
+            serde_json::Value::String(normalize_utf8(self.face_model.trim())),
+        );
         map.insert("face_similarity", serde_json::Value::String(sim_str));
-        map.insert("image_sha256", serde_json::Value::String(normalize_utf8(self.image_sha256.trim()).to_lowercase()));
-        map.insert("platform", serde_json::Value::String(normalize_utf8(self.platform.trim()).to_lowercase()));
-        map.insert("provider", serde_json::Value::String(normalize_utf8(self.provider.trim())));
-        map.insert("retrieved_at", serde_json::Value::String(self.retrieved_at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)));
-        map.insert("run_id", serde_json::Value::String(normalize_utf8(self.run_id.trim())));
-        map.insert("schema_version", serde_json::Value::String(normalize_utf8(self.schema_version.trim())));
-        map.insert("source_url", serde_json::Value::String(normalize_url(&self.source_url)));
-        map.insert("text", serde_json::Value::String(normalize_utf8(self.text.trim())));
-        map.insert("title", serde_json::Value::String(normalize_utf8(self.title.trim())));
+        map.insert(
+            "image_sha256",
+            serde_json::Value::String(normalize_utf8(self.image_sha256.trim()).to_lowercase()),
+        );
+        map.insert(
+            "platform",
+            serde_json::Value::String(normalize_utf8(self.platform.trim()).to_lowercase()),
+        );
+        map.insert(
+            "provider",
+            serde_json::Value::String(normalize_utf8(self.provider.trim())),
+        );
+        map.insert(
+            "retrieved_at",
+            serde_json::Value::String(
+                self.retrieved_at
+                    .to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            ),
+        );
+        map.insert(
+            "run_id",
+            serde_json::Value::String(normalize_utf8(self.run_id.trim())),
+        );
+        map.insert(
+            "schema_version",
+            serde_json::Value::String(normalize_utf8(self.schema_version.trim())),
+        );
+        map.insert(
+            "source_url",
+            serde_json::Value::String(normalize_url(&self.source_url)),
+        );
+        map.insert(
+            "text",
+            serde_json::Value::String(normalize_utf8(self.text.trim())),
+        );
+        map.insert(
+            "title",
+            serde_json::Value::String(normalize_utf8(self.title.trim())),
+        );
 
         serde_json::to_string(&map).map_err(|e| EvidenceError::Serialization(e.to_string()))
     }

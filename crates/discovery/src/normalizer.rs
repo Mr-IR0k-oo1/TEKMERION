@@ -32,7 +32,10 @@ pub fn validate_and_normalize_url(raw: &str) -> Result<Url, DiscoveryError> {
     if scheme != "http" && scheme != "https" {
         return Err(DiscoveryError::InvalidUrl {
             url: raw.to_string(),
-            reason: format!("unsupported scheme '{}'; only http and https are allowed", scheme),
+            reason: format!(
+                "unsupported scheme '{}'; only http and https are allowed",
+                scheme
+            ),
         });
     }
 
@@ -178,7 +181,8 @@ mod tests {
         // Port 80 should be stripped for http
         assert_eq!(url2.as_str(), "http://photos.example.org/face");
 
-        let url3 = validate_and_normalize_url("https://archive.example.net:443/doc#section").unwrap();
+        let url3 =
+            validate_and_normalize_url("https://archive.example.net:443/doc#section").unwrap();
         // Port 443 and fragment should be stripped
         assert_eq!(url3.as_str(), "https://archive.example.net/doc");
     }

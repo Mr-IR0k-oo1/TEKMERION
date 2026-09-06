@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
 
 use tekmerion_core::{PipelineState, SearchCandidate, VerificationResult, VerificationStatus};
+use tekmerion_evidence::{EvidenceBundle, EvidenceRecord, CURRENT_SCHEMA_VERSION};
 use tekmerion_face::FaceQualityAssessment;
 use tekmerion_verification::{CandidateRanker, RankedCandidate};
-use tekmerion_evidence::EvidenceBundle;
 use url::Url;
 
 use crate::input::{AppAction, Direction};
@@ -182,7 +182,9 @@ impl App {
                     url: Url::parse("https://landscapes.example.com/gallery").unwrap(),
                     title: Some("Scenic View".to_string()),
                     domain: "landscapes.example.com".to_string(),
-                    image_url: Some(Url::parse("https://landscapes.example.com/mountain.jpg").unwrap()),
+                    image_url: Some(
+                        Url::parse("https://landscapes.example.com/mountain.jpg").unwrap(),
+                    ),
                     thumbnail_url: None,
                     snippet: Some("Mountain horizon".to_string()),
                     provider: "external_reverse_image".to_string(),
@@ -216,7 +218,6 @@ impl App {
         ]
     }
 
-
     /// Set or update the face quality assessment.
     pub fn set_face_quality(&mut self, quality: FaceQualityAssessment) {
         self.face_quality = Some(quality);
@@ -249,7 +250,6 @@ impl App {
         self.discovery_error = Some(error_message.into());
     }
 
-
     /// Apply a user action, mutating state accordingly.
     pub fn apply(&mut self, action: AppAction) {
         match action {
@@ -281,7 +281,10 @@ impl App {
             if next == Stage::Face && self.face_quality.is_none() {
                 self.face_quality = Some(FaceQualityAssessment::sample_good());
             }
-            if next == Stage::Discovery && self.discovery_raw_count == 0 && self.discovery_error.is_none() {
+            if next == Stage::Discovery
+                && self.discovery_raw_count == 0
+                && self.discovery_error.is_none()
+            {
                 self.discovery_raw_count = 12;
                 self.discovery_unique_count = 8;
                 self.candidate_count = 8;
@@ -316,6 +319,40 @@ impl App {
         self.verified_candidates = results;
     }
 
+    /// Populate sample evidence record and Merkle bundle for Stage::Evidence.
+    pub fn populate_sample_evidence(&mut self) {
+        let matched = if let Some(top) = self.ranked_candidates.first() {
+            top.verification.clone()
+        } else if let Some(first) = self.verified_candidates.first() {
+            first.clone()
+        } else {
+            Self::sample_verified_candidates().remove(0)
+        };
+
+        let record = EvidenceRecord {
+            schema_version: CURRENT_SCHEMA_VERSION.to_string(),
+            run_id: "demo-run-001".to_string(),
+            source_url: matched.candidate.url.clone(),
+            domain: matched.candidate.domain.clone(),
+            platform: "web".to_string(),
+            provider: matched.candidate.provider.clone(),
+            retrieved_at: matched.candidate.discovered_at,
+            title: matched.candidate.title.clone().unwrap_or_default(),
+            text: matched.candidate.snippet.clone().unwrap_or_default(),
+            image_sha256: matched.candidate_image_hash.clone().unwrap_or_else(|| {
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string()
+            }),
+            face_similarity: matched.similarity,
+            face_model: "insightface-arcface-r100".to_string(),
+            candidate_quality: matched.quality,
+        };
+
+        if let Ok(bundle) = record.build_bundle() {
+            self.evidence_root = bundle.root_hash.clone();
+            self.evidence_bundle = Some(bundle);
+        }
+    }
+
     fn tamper(&mut self) {
         if self.status != AppStatus::Running {
             return;
@@ -343,6 +380,7 @@ impl App {
         self.discovery_error = None;
         self.verified_candidates.clear();
         self.ranked_candidates.clear();
+        self.evidence_bundle = None;
         self.push_event("Pipeline reset");
     }
 

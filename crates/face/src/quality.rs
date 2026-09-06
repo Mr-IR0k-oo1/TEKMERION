@@ -511,7 +511,10 @@ pub fn assess_face_quality(
     }
 
     // 2. Primary face bounding box
-    let primary_bbox = input.bounding_boxes.first().map(|b| FaceBoundingBox::from_array(*b));
+    let primary_bbox = input
+        .bounding_boxes
+        .first()
+        .map(|b| FaceBoundingBox::from_array(*b));
     let bbox_size = primary_bbox.map(|b| (b.width(), b.height()));
 
     let mut size_score = 0.0f32;
@@ -530,9 +533,10 @@ pub fn assess_face_quality(
                 "Face bounding box is small ({:.0}px < {:.0}px warning threshold)",
                 min_dim, thresholds.min_face_dim_warning
             ));
-            size_score = 0.3 + ((min_dim - thresholds.min_face_dim_reject)
-                / (thresholds.min_face_dim_warning - thresholds.min_face_dim_reject))
-                * 0.4;
+            size_score = 0.3
+                + ((min_dim - thresholds.min_face_dim_reject)
+                    / (thresholds.min_face_dim_warning - thresholds.min_face_dim_reject))
+                    * 0.4;
         } else {
             size_score = (0.7 + (min_dim - thresholds.min_face_dim_warning) / 100.0 * 0.3).min(1.0);
         }
@@ -744,8 +748,10 @@ pub fn assess_face_quality(
             // Guarantee reject score falls below reject threshold
             penalized.min(thresholds.score_warning_threshold - 0.01)
         } else if has_warning {
-            penalized
-                .clamp(thresholds.score_warning_threshold, thresholds.score_good_threshold - 0.01)
+            penalized.clamp(
+                thresholds.score_warning_threshold,
+                thresholds.score_good_threshold - 0.01,
+            )
         } else {
             penalized.max(thresholds.score_good_threshold)
         }
@@ -834,21 +840,29 @@ mod tests {
         let result = assess_face_quality(&input, &optimal_thresholds());
         assert_eq!(result.status, QualityStatus::Reject);
         assert_eq!(result.overall_quality, 0.0);
-        assert!(result.reasons.iter().any(|r| r.contains("No face detected")));
+        assert!(result
+            .reasons
+            .iter()
+            .any(|r| r.contains("No face detected")));
     }
 
     #[test]
     fn multiple_faces_produces_warning() {
         let input = QualityInput {
             face_count: 2,
-            bounding_boxes: vec![
-                [50.0, 50.0, 250.0, 300.0],
-                [350.0, 50.0, 550.0, 300.0],
-            ],
+            bounding_boxes: vec![[50.0, 50.0, 250.0, 300.0], [350.0, 50.0, 550.0, 300.0]],
             detector_confidences: vec![0.95, 0.92],
             poses: vec![
-                Some(WorkerPose { pitch: 0.0, yaw: 0.0, roll: 0.0 }),
-                Some(WorkerPose { pitch: 0.0, yaw: 0.0, roll: 0.0 }),
+                Some(WorkerPose {
+                    pitch: 0.0,
+                    yaw: 0.0,
+                    roll: 0.0,
+                }),
+                Some(WorkerPose {
+                    pitch: 0.0,
+                    yaw: 0.0,
+                    roll: 0.0,
+                }),
             ],
             landmarks: vec![None, None],
             image_resolution: Some((1920, 1080)),
@@ -868,7 +882,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[10.0, 10.0, 40.0, 45.0]], // 30x35 px, < 60px reject threshold
             detector_confidences: vec![0.85],
-            poses: vec![Some(WorkerPose { pitch: 0.0, yaw: 0.0, roll: 0.0 })],
+            poses: vec![Some(WorkerPose {
+                pitch: 0.0,
+                yaw: 0.0,
+                roll: 0.0,
+            })],
             landmarks: vec![None],
             image_resolution: Some((1920, 1080)),
             blur_variance: Some(150.0),
@@ -877,7 +895,10 @@ mod tests {
 
         let result = assess_face_quality(&input, &optimal_thresholds());
         assert_eq!(result.status, QualityStatus::Reject);
-        assert!(result.reasons.iter().any(|r| r.contains("bounding box too small")));
+        assert!(result
+            .reasons
+            .iter()
+            .any(|r| r.contains("bounding box too small")));
     }
 
     #[test]
@@ -886,7 +907,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[10.0, 10.0, 110.0, 120.0]],
             detector_confidences: vec![0.9],
-            poses: vec![Some(WorkerPose { pitch: 0.0, yaw: 0.0, roll: 0.0 })],
+            poses: vec![Some(WorkerPose {
+                pitch: 0.0,
+                yaw: 0.0,
+                roll: 0.0,
+            })],
             landmarks: vec![None],
             image_resolution: Some((120, 120)), // < 160x160 reject threshold
             blur_variance: Some(150.0),
@@ -904,7 +929,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[50.0, 50.0, 250.0, 300.0]],
             detector_confidences: vec![0.9],
-            poses: vec![Some(WorkerPose { pitch: 0.0, yaw: 0.0, roll: 0.0 })],
+            poses: vec![Some(WorkerPose {
+                pitch: 0.0,
+                yaw: 0.0,
+                roll: 0.0,
+            })],
             landmarks: vec![None],
             image_resolution: Some((1920, 1080)),
             blur_variance: Some(15.0), // < 30.0 reject threshold
@@ -923,7 +952,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[50.0, 50.0, 250.0, 300.0]],
             detector_confidences: vec![0.9],
-            poses: vec![Some(WorkerPose { pitch: 0.0, yaw: 0.0, roll: 0.0 })],
+            poses: vec![Some(WorkerPose {
+                pitch: 0.0,
+                yaw: 0.0,
+                roll: 0.0,
+            })],
             landmarks: vec![None],
             image_resolution: Some((1920, 1080)),
             blur_variance: Some(150.0),
@@ -942,7 +975,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[50.0, 50.0, 250.0, 300.0]],
             detector_confidences: vec![0.9],
-            poses: vec![Some(WorkerPose { pitch: 0.0, yaw: 0.0, roll: 0.0 })],
+            poses: vec![Some(WorkerPose {
+                pitch: 0.0,
+                yaw: 0.0,
+                roll: 0.0,
+            })],
             landmarks: vec![None],
             image_resolution: Some((1920, 1080)),
             blur_variance: Some(150.0),
@@ -961,7 +998,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[50.0, 50.0, 250.0, 300.0]],
             detector_confidences: vec![0.9],
-            poses: vec![Some(WorkerPose { pitch: 2.0, yaw: 65.0, roll: 1.0 })], // > 45 deg yaw
+            poses: vec![Some(WorkerPose {
+                pitch: 2.0,
+                yaw: 65.0,
+                roll: 1.0,
+            })], // > 45 deg yaw
             landmarks: vec![None],
             image_resolution: Some((1920, 1080)),
             blur_variance: Some(150.0),
@@ -979,7 +1020,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[50.0, 50.0, 250.0, 300.0]],
             detector_confidences: vec![0.9],
-            poses: vec![Some(WorkerPose { pitch: 2.0, yaw: 30.0, roll: 1.0 })], // > 25 deg warning
+            poses: vec![Some(WorkerPose {
+                pitch: 2.0,
+                yaw: 30.0,
+                roll: 1.0,
+            })], // > 25 deg warning
             landmarks: vec![None],
             image_resolution: Some((1920, 1080)),
             blur_variance: Some(150.0),
@@ -997,7 +1042,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[0.0, 50.0, 200.0, 300.0]], // x1 = 0 touches left border
             detector_confidences: vec![0.9],
-            poses: vec![Some(WorkerPose { pitch: 0.0, yaw: 0.0, roll: 0.0 })],
+            poses: vec![Some(WorkerPose {
+                pitch: 0.0,
+                yaw: 0.0,
+                roll: 0.0,
+            })],
             landmarks: vec![None],
             image_resolution: Some((1920, 1080)),
             blur_variance: Some(150.0),
@@ -1016,7 +1065,11 @@ mod tests {
             face_count: 1,
             bounding_boxes: vec![[100.0, 100.0, 340.0, 380.0]], // 240x280 px
             detector_confidences: vec![0.95],
-            poses: vec![Some(WorkerPose { pitch: 0.1, yaw: 0.2, roll: 0.3 })],
+            poses: vec![Some(WorkerPose {
+                pitch: 0.1,
+                yaw: 0.2,
+                roll: 0.3,
+            })],
             landmarks: vec![Some(vec![
                 [160.0, 180.0],
                 [280.0, 180.0],

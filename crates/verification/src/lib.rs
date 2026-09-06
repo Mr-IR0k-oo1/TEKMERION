@@ -27,5 +27,3 @@ pub use verifier::{
     CandidateFaceVerifier, CandidateImageDownloader, CandidateVerifierConfig, FaceAnalysisClient,
     DEFAULT_SIMILARITY_THRESHOLD,
 };
-
-

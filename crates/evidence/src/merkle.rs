@@ -280,7 +280,7 @@ impl EvidenceTree {
 
         for layer_idx in 0..self.layers.len() - 1 {
             let layer = &self.layers[layer_idx];
-            if idx % 2 == 0 {
+            if idx.is_multiple_of(2) {
                 if idx + 1 < layer.len() {
                     audit_path.push((layer[idx + 1].clone(), ProofDirection::Right));
                 }

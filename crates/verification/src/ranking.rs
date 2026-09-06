@@ -364,7 +364,8 @@ impl CandidateRanker {
             .then_with(|| b.source_relevance.total_cmp(&a.source_relevance))
             // 5. Quinary: status priority
             .then_with(|| {
-                status_priority(&b.verification.status).cmp(&status_priority(&a.verification.status))
+                status_priority(&b.verification.status)
+                    .cmp(&status_priority(&a.verification.status))
             })
             // 6. Senary: canonical URL lexicographical ordering
             .then_with(|| {
@@ -484,12 +485,18 @@ mod tests {
     fn test_weights_validation_rejects_invalid_values() {
         assert!(matches!(
             RankingWeights::new(-0.1, 0.5, 0.2, 0.2),
-            Err(RankingError::NegativeWeight { name: "face_similarity", .. })
+            Err(RankingError::NegativeWeight {
+                name: "face_similarity",
+                ..
+            })
         ));
 
         assert!(matches!(
             RankingWeights::new(f32::NAN, 0.5, 0.2, 0.2),
-            Err(RankingError::NonFiniteWeight { name: "face_similarity", .. })
+            Err(RankingError::NonFiniteWeight {
+                name: "face_similarity",
+                ..
+            })
         ));
 
         assert!(matches!(
@@ -514,14 +521,7 @@ mod tests {
     fn test_no_face_status_penalizes_similarity_and_face_quality() {
         let ranker = CandidateRanker::new();
         let cand = sample_candidate("nf", "landscape.com");
-        let v = VerificationResult::new(
-            cand,
-            0.0,
-            0.0,
-            None,
-            None,
-            VerificationStatus::NoFace,
-        );
+        let v = VerificationResult::new(cand, 0.0, 0.0, None, None, VerificationStatus::NoFace);
 
         let input = CandidateRankingInput {
             verification: v,
@@ -656,7 +656,11 @@ mod tests {
         };
 
         let ranked = tie_ranker.rank_inputs(vec![in_b.clone(), in_a.clone()]);
-        assert_eq!(ranked[0].source(), "same-score-a.com", "higher similarity must break tie");
+        assert_eq!(
+            ranked[0].source(),
+            "same-score-a.com",
+            "higher similarity must break tie"
+        );
         assert_eq!(ranked[0].rank(), 1);
         assert_eq!(ranked[1].rank(), 2);
 

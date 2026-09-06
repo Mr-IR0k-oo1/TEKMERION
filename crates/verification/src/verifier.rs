@@ -237,7 +237,9 @@ impl CandidateFaceVerifier {
                 matched_face_index: None,
                 candidate_image_hash: Some(candidate_image_hash),
                 status: VerificationStatus::Error,
-                error_message: Some("failed to compute similarity for all detected faces".to_string()),
+                error_message: Some(
+                    "failed to compute similarity for all detected faces".to_string(),
+                ),
             };
         }
 
@@ -268,7 +270,10 @@ impl CandidateFaceVerifier {
     }
 
     /// Verify multiple candidates in sequence.
-    pub async fn verify_candidates(&self, candidates: Vec<SearchCandidate>) -> Vec<VerificationResult> {
+    pub async fn verify_candidates(
+        &self,
+        candidates: Vec<SearchCandidate>,
+    ) -> Vec<VerificationResult> {
         let mut results = Vec::with_capacity(candidates.len());
         for candidate in candidates {
             results.push(self.verify_single(&candidate).await);
@@ -363,14 +368,35 @@ mod tests {
         // Face 1: [0.96, 0.28, 0.0] -> sim 0.96, quality 0.91 (HIGHEST)
         // Face 2: [0.5, 0.5, 0.0] -> sim ~0.707, quality 0.85
         let detections = vec![
-            FaceDetection { bounding_box: [0.0, 0.0, 1.0, 1.0], confidence: 0.9, quality: 0.70 },
-            FaceDetection { bounding_box: [0.0, 0.0, 1.0, 1.0], confidence: 0.95, quality: 0.91 },
-            FaceDetection { bounding_box: [0.0, 0.0, 1.0, 1.0], confidence: 0.88, quality: 0.85 },
+            FaceDetection {
+                bounding_box: [0.0, 0.0, 1.0, 1.0],
+                confidence: 0.9,
+                quality: 0.70,
+            },
+            FaceDetection {
+                bounding_box: [0.0, 0.0, 1.0, 1.0],
+                confidence: 0.95,
+                quality: 0.91,
+            },
+            FaceDetection {
+                bounding_box: [0.0, 0.0, 1.0, 1.0],
+                confidence: 0.88,
+                quality: 0.85,
+            },
         ];
         let embeddings = vec![
-            FaceEmbedding { vector: vec![0.0, 1.0, 0.0], normalized: true },
-            FaceEmbedding { vector: vec![0.96, 0.28, 0.0], normalized: true },
-            FaceEmbedding { vector: vec![0.5, 0.5, 0.0], normalized: false },
+            FaceEmbedding {
+                vector: vec![0.0, 1.0, 0.0],
+                normalized: true,
+            },
+            FaceEmbedding {
+                vector: vec![0.96, 0.28, 0.0],
+                normalized: true,
+            },
+            FaceEmbedding {
+                vector: vec![0.5, 0.5, 0.0],
+                normalized: false,
+            },
         ];
 
         let analysis = FaceAnalysis {
@@ -399,7 +425,10 @@ mod tests {
         assert_eq!(result.matched_face_index, Some(1));
         assert!((result.similarity - 0.96).abs() < 1e-3);
         assert!((result.quality - 0.91).abs() < 1e-3);
-        assert_eq!(result.candidate_image_hash.as_deref(), Some("abcd1234deadbeef"));
+        assert_eq!(
+            result.candidate_image_hash.as_deref(),
+            Some("abcd1234deadbeef")
+        );
         assert_eq!(result.status.label(), "Verified");
     }
 
@@ -408,12 +437,15 @@ mod tests {
         let query_vec = vec![1.0, 0.0, 0.0];
 
         // Similarity is 0.50 (< 0.75 threshold)
-        let detections = vec![
-            FaceDetection { bounding_box: [0.0, 0.0, 1.0, 1.0], confidence: 0.9, quality: 0.80 },
-        ];
-        let embeddings = vec![
-            FaceEmbedding { vector: vec![0.5, 0.866, 0.0], normalized: true },
-        ];
+        let detections = vec![FaceDetection {
+            bounding_box: [0.0, 0.0, 1.0, 1.0],
+            confidence: 0.9,
+            quality: 0.80,
+        }];
+        let embeddings = vec![FaceEmbedding {
+            vector: vec![0.5, 0.866, 0.0],
+            normalized: true,
+        }];
 
         let analysis = FaceAnalysis {
             detections,
@@ -494,7 +526,11 @@ mod tests {
 
         assert_eq!(result.status, VerificationStatus::Error);
         assert!(result.error_message.is_some());
-        assert!(result.error_message.as_ref().unwrap().contains("download failed"));
+        assert!(result
+            .error_message
+            .as_ref()
+            .unwrap()
+            .contains("download failed"));
         assert_eq!(result.candidate_image_hash, None);
     }
 
@@ -517,7 +553,14 @@ mod tests {
 
         assert_eq!(result.status, VerificationStatus::Error);
         assert!(result.error_message.is_some());
-        assert!(result.error_message.as_ref().unwrap().contains("face worker analysis failed"));
-        assert_eq!(result.candidate_image_hash.as_deref(), Some("downloaded_hash_123"));
+        assert!(result
+            .error_message
+            .as_ref()
+            .unwrap()
+            .contains("face worker analysis failed"));
+        assert_eq!(
+            result.candidate_image_hash.as_deref(),
+            Some("downloaded_hash_123")
+        );
     }
 }

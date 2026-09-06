@@ -19,10 +19,12 @@ pub mod mock {
     use crate::error::DiscoveryError;
     use crate::provider::{DiscoveryProvider, RawCandidate};
 
+    type MockResponses = Arc<Mutex<Vec<Result<Vec<RawCandidate>, DiscoveryError>>>>;
+
     /// Configurable mock provider for hermetic testing of engine behavior.
     pub struct MockDiscoveryProvider {
         id: String,
-        responses: Arc<Mutex<Vec<Result<Vec<RawCandidate>, DiscoveryError>>>>,
+        responses: MockResponses,
         delay: Option<Duration>,
         call_count: Arc<AtomicUsize>,
     }

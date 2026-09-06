@@ -26,7 +26,10 @@ fn main() {
     println!("   schema_version:    {}", record.schema_version);
     println!("   run_id:            {}", record.run_id);
     println!("   source_url (raw):  {}", record.source_url);
-    println!("   source_url (norm): {}", normalize_url(&record.source_url));
+    println!(
+        "   source_url (norm): {}",
+        normalize_url(&record.source_url)
+    );
     println!("   domain:            {}", record.domain);
     println!("   platform:          {}", record.platform);
     println!("   provider:          {}", record.provider);
@@ -56,8 +59,14 @@ fn main() {
     let mod_hashes = modified_title.compute_hashes().unwrap();
     println!("   orig content_hash:  {}", hashes.content_hash);
     println!("   mod  content_hash:  {}", mod_hashes.content_hash);
-    println!("   Hashes differ?      {} (Expected: true)", hashes.content_hash != mod_hashes.content_hash);
-    println!("   metadata_hash same? {} (Domain separation preserved)\n", hashes.metadata_hash == mod_hashes.metadata_hash);
+    println!(
+        "   Hashes differ?      {} (Expected: true)",
+        hashes.content_hash != mod_hashes.content_hash
+    );
+    println!(
+        "   metadata_hash same? {} (Domain separation preserved)\n",
+        hashes.metadata_hash == mod_hashes.metadata_hash
+    );
 
     println!("5. Proof: Changing 'source_url':");
     let mut modified_url = record.clone();
@@ -65,15 +74,22 @@ fn main() {
     let url_hashes = modified_url.compute_hashes().unwrap();
     println!("   orig metadata_hash: {}", hashes.metadata_hash);
     println!("   mod  metadata_hash: {}", url_hashes.metadata_hash);
-    println!("   Hashes differ?      {} (Expected: true)\n", hashes.metadata_hash != url_hashes.metadata_hash);
+    println!(
+        "   Hashes differ?      {} (Expected: true)\n",
+        hashes.metadata_hash != url_hashes.metadata_hash
+    );
 
     println!("6. Proof: Changing 'image_sha256':");
     let mut modified_img = record.clone();
-    modified_img.image_sha256 = "0000000000000000000000000000000000000000000000000000000000000000".to_string();
+    modified_img.image_sha256 =
+        "0000000000000000000000000000000000000000000000000000000000000000".to_string();
     let img_hashes = modified_img.compute_hashes().unwrap();
     println!("   orig image_hash:    {}", hashes.image_hash);
     println!("   mod  image_hash:    {}", img_hashes.image_hash);
-    println!("   Hashes differ?      {} (Expected: true)\n", hashes.image_hash != img_hashes.image_hash);
+    println!(
+        "   Hashes differ?      {} (Expected: true)\n",
+        hashes.image_hash != img_hashes.image_hash
+    );
 
     println!("7. Proof: Changing 'face_similarity':");
     let mut modified_face = record.clone();
@@ -81,7 +97,10 @@ fn main() {
     let face_hashes = modified_face.compute_hashes().unwrap();
     println!("   orig face_hash:     {}", hashes.face_result_hash);
     println!("   mod  face_hash:     {}", face_hashes.face_result_hash);
-    println!("   Hashes differ?      {} (Expected: true)\n", hashes.face_result_hash != face_hashes.face_result_hash);
+    println!(
+        "   Hashes differ?      {} (Expected: true)\n",
+        hashes.face_result_hash != face_hashes.face_result_hash
+    );
 
     println!("8. Proof: Unicode NFC Invariance:");
     let mut rec_pre = record.clone();
@@ -92,7 +111,10 @@ fn main() {
     let h_dec = rec_dec.compute_hashes().unwrap();
     println!("   Precomposed content_hash: {}", h_pre.content_hash);
     println!("   Decomposed  content_hash: {}", h_dec.content_hash);
-    println!("   Hashes identical?         {} (Expected: true)\n", h_pre.content_hash == h_dec.content_hash);
+    println!(
+        "   Hashes identical?         {} (Expected: true)\n",
+        h_pre.content_hash == h_dec.content_hash
+    );
 
     println!("============================================================");
     println!("     ALL DETERMINISM CHECKS VERIFIED SUCCESSFULLY!");

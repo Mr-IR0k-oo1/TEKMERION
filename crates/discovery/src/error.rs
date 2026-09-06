@@ -7,17 +7,11 @@ use thiserror::Error;
 pub enum DiscoveryError {
     /// An upstream search provider failed with an error message.
     #[error("provider '{provider}' error: {message}")]
-    Provider {
-        provider: String,
-        message: String,
-    },
+    Provider { provider: String, message: String },
 
     /// A discovery provider query timed out.
     #[error("timeout waiting for provider '{provider}' after {timeout_ms}ms")]
-    Timeout {
-        provider: String,
-        timeout_ms: u64,
-    },
+    Timeout { provider: String, timeout_ms: u64 },
 
     /// Upstream rate limit or quota exceeded.
     #[error("rate limit exceeded for provider '{provider}'{}", .retry_after_secs.map(|s| format!(" (retry after {s}s)")).unwrap_or_default())]
@@ -28,10 +22,7 @@ pub enum DiscoveryError {
 
     /// A URL candidate failed validation.
     #[error("invalid URL '{url}': {reason}")]
-    InvalidUrl {
-        url: String,
-        reason: String,
-    },
+    InvalidUrl { url: String, reason: String },
 
     /// Discovery engine or provider configuration error.
     #[error("invalid discovery configuration: {0}")]

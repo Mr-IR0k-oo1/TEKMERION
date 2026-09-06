@@ -130,7 +130,10 @@ impl DiscoveryEngine {
         let mut any_success = false;
 
         for provider in &self.providers {
-            match self.query_provider_with_retry(provider.as_ref(), analysis).await {
+            match self
+                .query_provider_with_retry(provider.as_ref(), analysis)
+                .await
+            {
                 Ok(raw_list) => {
                     any_success = true;
                     for raw in raw_list {

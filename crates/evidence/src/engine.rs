@@ -66,11 +66,9 @@ impl EvidenceEngine for DeterministicEvidenceEngine {
             candidate_quality: matched.quality,
         };
 
-        let bundle = record.build_bundle().map_err(|e| {
-            PipelineError::Stage {
-                stage: PipelineStage::Evidence,
-                message: format!("failed to compute evidence tree: {}", e),
-            }
+        let bundle = record.build_bundle().map_err(|e| PipelineError::Stage {
+            stage: PipelineStage::Evidence,
+            message: format!("failed to compute evidence tree: {}", e),
         })?;
 
         Ok(bundle.into())

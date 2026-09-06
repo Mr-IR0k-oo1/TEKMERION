@@ -176,10 +176,16 @@ fn renders_face_quality_on_face_stage() {
     let screen = buffer_to_string(&terminal);
 
     // Verify all required FACE QUALITY fields from the prompt
-    assert!(screen.contains("FACE QUALITY"), "must show FACE QUALITY header");
+    assert!(
+        screen.contains("FACE QUALITY"),
+        "must show FACE QUALITY header"
+    );
     assert!(screen.contains("Faces:"), "must show Faces: label");
     assert!(screen.contains("1"), "must show face count 1");
-    assert!(screen.contains("Resolution:"), "must show Resolution: label");
+    assert!(
+        screen.contains("Resolution:"),
+        "must show Resolution: label"
+    );
     assert!(screen.contains("1920x1080"), "must show image resolution");
     assert!(screen.contains("Blur:"), "must show Blur: label");
     assert!(screen.contains("LOW"), "must show LOW blur");
@@ -222,7 +228,7 @@ fn renders_discovery_stage_on_standard_terminal() {
     let backend = TestBackend::new(80, 24);
     let mut terminal = Terminal::new(backend).expect("failed to create terminal");
     let mut app = App::new();
-    app.apply(AppAction::Start);  // Stage::Input
+    app.apply(AppAction::Start); // Stage::Input
     app.apply(AppAction::Verify); // Stage::Face
     app.apply(AppAction::Verify); // Stage::Discovery
 
@@ -237,10 +243,16 @@ fn renders_discovery_stage_on_standard_terminal() {
     // Verify all required DISCOVERY fields from the prompt
     assert!(screen.contains("DISCOVERY"), "must show DISCOVERY header");
     assert!(screen.contains("Provider:"), "must show Provider: label");
-    assert!(screen.contains("external_reverse_image"), "must show provider name");
+    assert!(
+        screen.contains("external_reverse_image"),
+        "must show provider name"
+    );
     assert!(screen.contains("Request:"), "must show Request: label");
     assert!(screen.contains("SENT"), "must show SENT request status");
-    assert!(screen.contains("Candidates:"), "must show Candidates: label");
+    assert!(
+        screen.contains("Candidates:"),
+        "must show Candidates: label"
+    );
     assert!(screen.contains("12"), "must show candidate count");
     assert!(screen.contains("Unique:"), "must show Unique: label");
     assert!(screen.contains("8"), "must show unique candidate count");
@@ -278,7 +290,10 @@ fn renders_discovery_failure_clearly() {
     app.apply(AppAction::Verify);
     app.apply(AppAction::Verify);
 
-    app.set_discovery_error("google_lens", "Rate limit exceeded (HTTP 429): retry after 30s");
+    app.set_discovery_error(
+        "google_lens",
+        "Rate limit exceeded (HTTP 429): retry after 30s",
+    );
 
     terminal
         .draw(|frame| ui::render(frame, &app))
@@ -291,7 +306,10 @@ fn renders_discovery_failure_clearly() {
     assert!(screen.contains("google_lens"));
     assert!(screen.contains("Request:"));
     assert!(screen.contains("FAILED"), "must show FAILED request status");
-    assert!(screen.contains("SEARCH FAILURE:"), "must clearly show SEARCH FAILURE header");
+    assert!(
+        screen.contains("SEARCH FAILURE:"),
+        "must clearly show SEARCH FAILURE header"
+    );
     assert!(
         screen.contains("Rate limit exceeded"),
         "must clearly display failure details"
@@ -415,7 +433,10 @@ fn renders_candidate_ranking_columns_and_deterministic_order() {
     // Verify all 6 required display columns are rendered
     assert!(screen.contains("RANK"), "must display RANK column");
     assert!(screen.contains("SOURCE"), "must display SOURCE column");
-    assert!(screen.contains("SIMILARITY"), "must display SIMILARITY column");
+    assert!(
+        screen.contains("SIMILARITY"),
+        "must display SIMILARITY column"
+    );
     assert!(screen.contains("QUALITY"), "must display QUALITY column");
     assert!(screen.contains("SCORE"), "must display SCORE column");
     assert!(screen.contains("STATUS"), "must display STATUS column");
@@ -442,4 +463,3 @@ fn renders_candidate_ranking_columns_and_deterministic_order() {
         "forbidden phrasing 'identity confirmed' must never appear in TUI"
     );
 }
-
