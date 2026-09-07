@@ -59,7 +59,7 @@ export const PIPELINE_STAGES: PipelineStageInfo[] = [
   },
 ];
 
-export type PipelineStatus = 'idle' | 'running' | 'completed' | 'tampered' | 'error';
+export type PipelineStatus = 'idle' | 'running' | 'completed' | 'no_match' | 'tampered' | 'error';
 
 export type ViewTab = 'pipeline' | 'merkle' | 'tamper' | 'candidates' | 'audit';
 

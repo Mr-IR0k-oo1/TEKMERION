@@ -234,7 +234,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           </button>
         </div>
 
-        {/* Completion or Tamper Alert Banners */}
+        {/* Completion, No Match, Gate Rejection, or Tamper Alert Banners */}
         {isCompleted && (
           <div className="stage-banner stage-banner-verified">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -256,6 +256,38 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
             >
               Celebrate
             </button>
+          </div>
+        )}
+
+        {status === 'no_match' && (
+          <div className="stage-banner" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--amber-warn)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <AlertCircle size={26} color="var(--amber-warn)" />
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#fbbf24' }}>
+                  NO BIOMETRIC MATCH FOUND (BELOW 75% THRESHOLD)
+                </h3>
+                <p style={{ fontSize: '13px', opacity: 0.9, color: '#fef3c7' }}>
+                  All candidate web assets scored below the required 75.0% biometric similarity threshold. Evidence bundle creation and Ethereum Sepolia anchoring were halted.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {quality.status === 'fail' && (
+          <div className="stage-banner" style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid var(--crimson-tamper)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <ShieldX size={26} color="var(--crimson-tamper)" />
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ef4444' }}>
+                  FORENSIC INPUT GATE REJECTION ✗
+                </h3>
+                <p style={{ fontSize: '13px', opacity: 0.9, color: '#fee2e2' }}>
+                  {quality.reasons.join(', ') || 'Face detection or quality criteria not satisfied. Pipeline halted.'}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -442,6 +474,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
             </div>
             {blockchainRecord && (completedStages.includes('BLOCKCHAIN') || isCompleted) ? (
               <span className="badge badge-violet">ANCHORED ON-CHAIN</span>
+            ) : status === 'no_match' ? (
+              <span className="badge badge-amber">HALTED (NO MATCH)</span>
             ) : (
               <span className="badge badge-cyan">PENDING</span>
             )}
@@ -453,13 +487,17 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               <div
                 className="mono"
                 style={{
-                  color: isTampered ? 'var(--crimson-tamper)' : 'var(--emerald-verified)',
+                  color: isTampered
+                    ? 'var(--crimson-tamper)'
+                    : evidenceBundle?.root_hash
+                    ? 'var(--emerald-verified)'
+                    : 'var(--text-muted)',
                   fontSize: '12px',
                   wordBreak: 'break-all',
                   marginTop: '4px',
                 }}
               >
-                {evidenceBundle?.root_hash || '--'}
+                {evidenceBundle?.root_hash || (status === 'no_match' ? '-- (Halted: Similarity < 75%)' : '--')}
               </div>
             </div>
 
@@ -468,16 +506,38 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               <div
                 className="mono"
                 style={{
-                  color: 'var(--violet-chain)',
+                  color: blockchainRecord?.registered_root ? 'var(--violet-chain)' : 'var(--text-muted)',
                   fontSize: '12px',
                   wordBreak: 'break-all',
                   marginTop: '4px',
                 }}
               >
-                {blockchainRecord?.registered_root || '--'}
+                {blockchainRecord?.registered_root || (status === 'no_match' ? '-- (Registration halted)' : '--')}
               </div>
             </div>
           </div>
+
+          {status === 'no_match' && (
+            <div
+              style={{
+                marginTop: '12px',
+                padding: '10px 14px',
+                borderRadius: '4px',
+                background: 'rgba(245, 158, 11, 0.08)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                color: '#fbbf24',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <AlertCircle size={15} style={{ flexShrink: 0 }} />
+              <span>
+                Zero-Trust Forensics: Merkle evidence generation and Sepolia anchoring are strictly halted because candidate similarity is below the 75.0% threshold.
+              </span>
+            </div>
+          )}
 
           {blockchainRecord && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '12px', color: 'var(--text-secondary)' }}>

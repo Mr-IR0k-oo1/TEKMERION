@@ -31,6 +31,8 @@ export interface MerkleLeafInfo {
 
 export interface PipelineRunResult {
   success: boolean;
+  match_found: boolean;
+  biometric_status: 'MATCH_FOUND' | 'NO_MATCH' | 'NOT_CHECKED';
   gate_rejected?: 'NO_FACE' | 'MULTIPLE_FACES' | 'LOW_FACE_QUALITY' | 'INPUT_ERROR';
   error?: string;
   run_id: string;
@@ -187,6 +189,8 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
     );
     return {
       success: false,
+      match_found: false,
+      biometric_status: 'NOT_CHECKED',
       gate_rejected: 'NO_FACE',
       error: 'Forensic Gate Rejection: Zero faces detected. Pipeline halted.',
       run_id: runId,
@@ -232,6 +236,8 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
     );
     return {
       success: false,
+      match_found: false,
+      biometric_status: 'NOT_CHECKED',
       gate_rejected: 'MULTIPLE_FACES',
       error: `Forensic Gate Rejection: Multiple faces detected (${faceResult.face_count}). Pipeline halted.`,
       run_id: runId,
@@ -280,6 +286,8 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
     );
     return {
       success: false,
+      match_found: false,
+      biometric_status: 'NOT_CHECKED',
       gate_rejected: 'LOW_FACE_QUALITY',
       error: `Forensic Gate Rejection: ${reason}. Pipeline halted before reverse image search.`,
       run_id: runId,
@@ -320,10 +328,105 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
   const queryEmbedding = faceResult.full_embedding;
   pushEvent('Stage FACE_ANALYSIS passed: single face verified, 512-D ArcFace vector generated');
 
-  // 3. Stage: Candidate Discovery (Dynamic catalog scanner + reverse image sources)
-  pushEvent('Stage: DISCOVERY querying candidate catalog and reverse image sources');
+async function queryReverseImageSearch(
+  imagePath: string,
+  discDir: string
+): Promise<Array<{
+  id: string;
+  file: string;
+  url: string;
+  domain: string;
+  title: string;
+  snippet: string;
+  provider: string;
+  image_url: string;
+  thumbnail_url: string;
+}>> {
+  const apiKey = process.env.SERPAPI_API_KEY || process.env.TEKMERION_SEARCH_API_KEY;
+  if (!apiKey) {
+    return [];
+  }
+  try {
+    const endpoint = process.env.TEKMERION_SEARCH_ENDPOINT || 'https://serpapi.com/search.json?engine=google_lens';
+    const form = new FormData();
+    const fileBuffer = fs.readFileSync(imagePath);
+    form.append('file', new Blob([fileBuffer], { type: 'image/jpeg' }), path.basename(imagePath));
+    form.append('api_key', apiKey);
+
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      body: form,
+    });
+
+    if (!resp.ok) {
+      console.warn(`[SearchProvider] External search returned HTTP ${resp.status}`);
+      return [];
+    }
+
+    const data = (await resp.json()) as any;
+    const visualMatches = data.visual_matches || data.results || [];
+    const results: any[] = [];
+    const candDownloadDir = path.join(discDir, 'candidates');
+    fs.mkdirSync(candDownloadDir, { recursive: true });
+
+    for (let i = 0; i < Math.min(8, visualMatches.length); i++) {
+      const vm = visualMatches[i];
+      const link = vm.link || vm.source_url || vm.url;
+      const title = vm.title || vm.source || `Web Match #${i + 1}`;
+      const snippet = vm.snippet || vm.source || '';
+      const thumbUrl = vm.thumbnail || vm.image_url;
+      let candFile = '';
+
+      if (thumbUrl && (thumbUrl.startsWith('http://') || thumbUrl.startsWith('https://'))) {
+        try {
+          const imgResp = await fetch(thumbUrl, { signal: AbortSignal.timeout(5000) });
+          if (imgResp.ok) {
+            const imgBuf = Buffer.from(await imgResp.arrayBuffer());
+            candFile = path.join(candDownloadDir, `web_cand_${i + 1}.jpg`);
+            fs.writeFileSync(candFile, imgBuf);
+          }
+        } catch (e) {
+          console.warn(`[SearchProvider] Could not download candidate thumbnail for ${link}:`, e);
+        }
+      }
+
+      if (candFile && fs.existsSync(candFile)) {
+        let domain = 'web.source';
+        try {
+          domain = new URL(link).hostname;
+        } catch {}
+        results.push({
+          id: `web-cand-${String(i + 1).padStart(2, '0')}`,
+          file: candFile,
+          url: link,
+          domain,
+          title,
+          snippet,
+          provider: 'google_lens_live',
+          image_url: thumbUrl || `/candidates/web_cand_${i + 1}.jpg`,
+          thumbnail_url: thumbUrl || `/candidates/web_cand_${i + 1}.jpg`,
+        });
+      }
+    }
+    return results;
+  } catch (err) {
+    console.warn('[SearchProvider] Error during reverse image search:', err);
+    return [];
+  }
+}
+
+  // 3. Stage: Candidate Discovery (Dynamic catalog scanner + live reverse image search)
+  pushEvent('Stage: DISCOVERY querying reverse image search and candidate catalog');
+  
+  // A. Query Live Reverse Image Search if configured
+  const liveWebCandidates = await queryReverseImageSearch(inputFilePath, discDir);
+  if (liveWebCandidates.length > 0) {
+    pushEvent(`Live reverse-image discovery retrieved ${liveWebCandidates.length} web candidate assets`);
+  }
+
+  // B. Query Dynamic Catalog Candidates
   const candidatesDir = path.join(rootDir, 'assets', 'candidates');
-  const candidateDefs: Array<{
+  const catalogCandidateDefs: Array<{
     id: string;
     file: string;
     url: string;
@@ -341,14 +444,13 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
       return ['.jpg', '.jpeg', '.png', '.webp', '.bmp'].includes(ext);
     });
 
-    candidateFiles.sort(); // Deterministic file ordering
+    candidateFiles.sort();
 
     for (let i = 0; i < candidateFiles.length; i++) {
       const f = candidateFiles[i];
       const filePath = path.join(candidatesDir, f);
       const baseName = path.basename(f, path.extname(f));
 
-      // Sidecar metadata if present
       const metaPath = path.join(candidatesDir, `${baseName}.json`);
       let meta: any = {};
       if (fs.existsSync(metaPath)) {
@@ -362,7 +464,7 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
         .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(' ');
 
-      candidateDefs.push({
+      catalogCandidateDefs.push({
         id: `cand-${String(i + 1).padStart(2, '0')}`,
         file: filePath,
         url: meta.url || `https://archives.tekmerion.org/records/${baseName}.png`,
@@ -376,9 +478,11 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
     }
   }
 
+  const allCandidateDefs = [...liveWebCandidates, ...catalogCandidateDefs];
+
   // Deduplicate candidates by URL
-  const uniqueCandidateMap = new Map<string, typeof candidateDefs[0]>();
-  for (const c of candidateDefs) {
+  const uniqueCandidateMap = new Map<string, typeof allCandidateDefs[0]>();
+  for (const c of allCandidateDefs) {
     if (!uniqueCandidateMap.has(c.url)) {
       uniqueCandidateMap.set(c.url, c);
     }
@@ -454,7 +558,7 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
     });
   }
 
-  // Deterministic ranking: status priority, then rankScore desc, then domain asc
+  // Deterministic ranking: status priority (Verified first), then rankScore desc, then domain asc
   evaluatedCandidates.sort((a, b) => {
     if (a.status === 'Verified' && b.status !== 'Verified') return -1;
     if (b.status === 'Verified' && a.status !== 'Verified') return 1;
@@ -467,13 +571,85 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
   });
 
   fs.writeFileSync(path.join(verDir, 'results.json'), JSON.stringify(evaluatedCandidates, null, 2));
-  pushEvent(
-    `Verification complete: top match ${evaluatedCandidates[0]?.title} (Cosine similarity: ${evaluatedCandidates[0]?.similarity})`
-  );
 
-  // 5. Stage: Evidence Creation (5-Leaf RFC 8785 Canonical JSON Merkle Tree)
+  // CHECK STRICT BIOMETRIC THRESHOLD FOR MATCH
+  const verifiedCandidates = evaluatedCandidates.filter((c) => c.status === 'Verified');
+  const hasMatch = verifiedCandidates.length > 0;
+
+  if (!hasMatch) {
+    const topNonMatch = evaluatedCandidates[0];
+    pushEvent(
+      `Verification complete: NO_MATCH_FOUND (All ${evaluatedCandidates.length} candidates below 75% threshold. Highest similarity: ${(
+        (topNonMatch?.similarity || 0) * 100
+      ).toFixed(1)}%)`
+    );
+    fs.writeFileSync(
+      path.join(runDir, 'audit.jsonl'),
+      auditLog.map((e) => JSON.stringify(e)).join('\n')
+    );
+
+    return {
+      success: true,
+      match_found: false,
+      biometric_status: 'NO_MATCH',
+      run_id: runId,
+      input: {
+        filename: originalFilename,
+        sha256: inputSha256,
+        resolution: inputMeta.resolution,
+        size_bytes: inputBuffer.length,
+        file_path: inputFilePath,
+      },
+      face: {
+        face_count: faceResult.face_count,
+        bbox: faceResult.bbox,
+        landmarks: faceResult.landmarks,
+        embedding_preview: faceResult.embedding,
+        quality: faceResult.quality,
+        blur_variance: faceResult.blur_variance,
+        status: 'pass',
+        reasons: faceResult.reasons,
+      },
+      discovery: {
+        provider: 'catalog_discovery',
+        request_status: 'COMPLETE',
+        raw_count: uniqueCandidates.length,
+        unique_count: uniqueCandidates.length,
+        candidates: evaluatedCandidates,
+      },
+      verification: {
+        threshold: 0.75,
+        verified_count: 0,
+        below_threshold_count: evaluatedCandidates.filter((c) => c.status === 'BelowThreshold').length,
+        no_face_count: evaluatedCandidates.filter((c) => c.status === 'NoFace').length,
+        top_candidate: topNonMatch || null,
+      },
+      evidence: {
+        schema_version: '1.0.0',
+        root_hash: '--',
+        leaves: [],
+        record: {},
+      },
+      blockchain: {
+        network: 'Ethereum Sepolia Testnet',
+        contract: '0x71C2d385aE2F56d9812A45B8a9b70d41C68E3a9E',
+        block_number: 0,
+        confirmations: 0,
+        tx_hash: '--',
+        registered_root: '--',
+        verified_match: false,
+        timestamp: new Date().toISOString(),
+      },
+      audit_log: auditLog,
+    };
+  }
+
+  // 5. Stage: Evidence Creation (5-Leaf RFC 8785 Canonical JSON Merkle Tree) - ONLY FOR VERIFIED MATCH
+  const matched = verifiedCandidates[0];
+  pushEvent(
+    `Match confirmed: "${matched.title}" (Cosine similarity: ${(matched.similarity * 100).toFixed(1)}% >= 75%)`
+  );
   pushEvent('Stage: EVIDENCE building 5-leaf RFC 8785 Merkle evidence tree');
-  const matched = evaluatedCandidates[0];
 
   const evidenceRecord = {
     schema_version: '1.0.0',
@@ -602,6 +778,8 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
 
   return {
     success: true,
+    match_found: true,
+    biometric_status: 'MATCH_FOUND',
     run_id: runId,
     input: {
       filename: originalFilename,
@@ -622,9 +800,9 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
     },
     discovery: {
       provider: 'catalog_discovery',
-      request_status: 'SENT',
-      raw_count: candidateDefs.length,
-      unique_count: candidateDefs.length,
+      request_status: 'COMPLETE',
+      raw_count: allCandidateDefs.length,
+      unique_count: uniqueCandidates.length,
       candidates: evaluatedCandidates,
     },
     verification: {

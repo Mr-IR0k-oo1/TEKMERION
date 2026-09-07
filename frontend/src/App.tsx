@@ -367,11 +367,26 @@ export const App: React.FC = () => {
       // Verify Stage
       const top = convertedCandidates[0];
       setCompletedStages((prev) => [...prev, 'VERIFY']);
+
+      if (!data.match_found) {
+        setStatus('no_match');
+        setEvidenceRecord(null);
+        setEvidenceBundle(null);
+        setBlockchainRecord(null);
+        pushAuditEvent(
+          `Stage 4 (VERIFY): No candidate met the 75.0% biometric match threshold. Top candidate similarity: ${
+            top ? (top.similarity * 100).toFixed(1) + '%' : 'None'
+          } -> NO MATCH FOUND. Blockchain registration halted.`,
+          'warn'
+        );
+        return;
+      }
+
       setCurrentStage('EVIDENCE');
       pushAuditEvent(
         `Stage 4 (VERIFY): ArcFace biometric cosine match: "${top?.candidate.title}" similarity = ${(
           (top?.similarity || 0) * 100
-        ).toFixed(2)}% (${top?.similarity >= 0.75 ? 'VERIFIED' : 'BELOW_THRESHOLD'})`,
+        ).toFixed(2)}% (MATCH CONFIRMED)`,
         'success'
       );
 
@@ -762,6 +777,26 @@ export const App: React.FC = () => {
 
       setCandidates(convertedCandidates);
 
+      if (!data.match_found) {
+        setEvidenceRecord(null);
+        setOriginalRecord(null);
+        setEvidenceBundle(null);
+        setBlockchainRecord(null);
+        setCurrentStage('VERIFY');
+        setCompletedStages(['INPUT', 'FACE', 'DISCOVERY', 'VERIFY']);
+        setStatus('no_match');
+
+        pushAuditEvent(`Stage 2 (FACE): Detected 1 face. Blur: ${data.face.blur_variance.toFixed(1)}`, 'success');
+        pushAuditEvent(`Stage 3 (DISCOVERY): Discovered ${convertedCandidates.length} candidate web assets`, 'info');
+        pushAuditEvent(
+          `Stage 4 (VERIFY): No candidate met the 75.0% biometric threshold. Top candidate similarity: ${
+            convertedCandidates[0] ? (convertedCandidates[0].similarity * 100).toFixed(1) + '%' : 'None'
+          } -> NO MATCH FOUND. Blockchain registration skipped.`,
+          'warn'
+        );
+        return;
+      }
+
       const record: EvidenceRecord = {
         schema_version: data.evidence.schema_version,
         run_id: data.run_id,
@@ -811,12 +846,12 @@ export const App: React.FC = () => {
 
       pushAuditEvent(`Stage 2 (FACE): Detected 1 face. Blur: ${data.face.blur_variance.toFixed(1)}`, 'success');
       pushAuditEvent(
-        `Stage 4 (VERIFY): Top candidate "${convertedCandidates[0]?.candidate.title}" similarity: ${(
+        `Stage 4 (VERIFY): Biometric match confirmed: "${convertedCandidates[0]?.candidate.title}" similarity = ${(
           (convertedCandidates[0]?.similarity || 0) * 100
-        ).toFixed(2)}%`,
+        ).toFixed(2)}% (MATCH FOUND)`,
         'success'
       );
-      pushAuditEvent(`Stage 6 (BLOCKCHAIN): Anchored to Ethereum Sepolia Block #${chainRec.block_number} ✓`, 'success');
+      pushAuditEvent(`Stage 6 (BLOCKCHAIN): Anchored evidence to Ethereum Sepolia Block #${chainRec.block_number} ✓`, 'success');
     } catch (err: any) {
       console.error('Custom image upload pipeline error:', err);
       pushAuditEvent(`Failed to execute pipeline for uploaded image: ${err.message}`, 'error');
