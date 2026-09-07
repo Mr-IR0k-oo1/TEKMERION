@@ -166,6 +166,9 @@ function getImageDimensionsFromPath(filePath: string): { width: number; height: 
             Math.max(0, Math.min(1000, Math.round((pt[1] / dims.height) * 1000))),
           ]);
 
+          const realBlur = typeof parsed.blur_variance === 'number' ? parsed.blur_variance : 150.0;
+          const realBrightness = typeof parsed.brightness === 'number' ? parsed.brightness : 128.0;
+
           resolve({
             success: true,
             face_count: 1,
@@ -174,9 +177,9 @@ function getImageDimensionsFromPath(filePath: string): { width: number; height: 
             embedding: embedding.slice(0, 8),
             full_embedding: embedding,
             quality,
-            blur_variance: 385.0,
+            blur_variance: realBlur,
             status: 'pass',
-            reasons: ['SCRFD 1 face detected', 'ArcFace embedding extracted', 'Quality gate passed'],
+            reasons: ['SCRFD 1 face detected', 'ArcFace embedding extracted', `Quality gate passed (Blur: ${realBlur.toFixed(1)}, Brightness: ${realBrightness.toFixed(1)})`],
             raw_faces: faces,
           });
         } else if (count > 1) {
@@ -189,6 +192,8 @@ function getImageDimensionsFromPath(filePath: string): { width: number; height: 
             Math.max(0, Math.min(1000, Math.round((bbox[3] / dims.height) * 1000))),
           ];
 
+          const realBlur = typeof parsed.blur_variance === 'number' ? parsed.blur_variance : 150.0;
+
           resolve({
             success: false,
             face_count: count,
@@ -200,7 +205,7 @@ function getImageDimensionsFromPath(filePath: string): { width: number; height: 
             embedding: [],
             full_embedding: [],
             quality: 0.5,
-            blur_variance: 220.0,
+            blur_variance: realBlur,
             status: 'fail',
             reasons: [`MULTIPLE_FACES detected: count = ${count}`, 'Forensic rule strictly requires exactly 1 face'],
             raw_faces: faces,

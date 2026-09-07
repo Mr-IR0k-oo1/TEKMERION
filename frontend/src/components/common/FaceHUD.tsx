@@ -29,6 +29,7 @@ export const FaceHUD: React.FC<FaceHUDProps> = ({
   const isMultipleFaces = quality.face_count > 1;
   const isNoFace = quality.face_count === 0;
   const isBlurFailed = quality.blur_variance < 100;
+  const isIdle = quality.status === 'idle' || !imageSrc;
 
   return (
     <div className="card face-hud-panel">
@@ -40,6 +41,10 @@ export const FaceHUD: React.FC<FaceHUDProps> = ({
           <span className="badge badge-emerald">
             <CheckCircle size={12} /> GATE PASSED
           </span>
+        ) : quality.status === 'idle' ? (
+          <span className="badge badge-secondary">
+            AWAITING INPUT
+          </span>
         ) : (
           <span className="badge badge-crimson">
             <AlertOctagon size={12} /> REJECTED
@@ -49,15 +54,20 @@ export const FaceHUD: React.FC<FaceHUDProps> = ({
 
       {/* Interactive HUD Viewport */}
       <div className="hud-viewport">
-        <img src={imageSrc} alt="Input Query" onError={(e) => {
-          // Fallback if local asset isn't loaded
-          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80';
-        }} />
+        {imageSrc ? (
+          <img src={imageSrc} alt="Input Query" />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '260px', color: 'var(--text-muted)', gap: '10px' }}>
+            <Scan size={40} color="var(--cyan-bright)" style={{ opacity: 0.5 }} />
+            <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Awaiting Forensic Image</div>
+            <div style={{ fontSize: '12px', opacity: 0.7 }}>Drop or select an image to inspect biometric features</div>
+          </div>
+        )}
 
         {isScanning && <div className="hud-laser" />}
 
         {/* Bounding Box HUD */}
-        {!isNoFace && (
+        {!isIdle && !isNoFace && (
           <div
             className="hud-bbox"
             style={{
@@ -76,7 +86,7 @@ export const FaceHUD: React.FC<FaceHUDProps> = ({
         )}
 
         {/* 5 Facial Landmarks */}
-        {!isNoFace && quality.landmarks.map((lm, idx) => (
+        {!isIdle && !isNoFace && quality.landmarks.map((lm, idx) => (
           <div
             key={idx}
             className="hud-landmark-dot"

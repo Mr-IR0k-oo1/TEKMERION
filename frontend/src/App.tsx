@@ -41,13 +41,22 @@ export const App: React.FC = () => {
   const [completedStages, setCompletedStages] = useState<PipelineStageId[]>([]);
   const [status, setStatus] = useState<PipelineStatus>('idle');
 
-  // Forensic Data
-  const [imageFileName, setImageFileName] = useState(currentSample.imageFileName);
-  const [imageSrc, setImageSrc] = useState(currentSample.imageSrc);
-  const [resolution, setResolution] = useState(currentSample.resolution);
-  const [imageHash, setImageHash] = useState(currentSample.imageHash);
-  const [quality, setQuality] = useState<FaceQualityAssessment>(currentSample.faceQuality);
-  const [candidates, setCandidates] = useState<VerificationResult[]>(currentSample.candidates);
+  // Forensic Data (Zero mock data - begins awaiting user upload)
+  const [imageFileName, setImageFileName] = useState('');
+  const [imageSrc, setImageSrc] = useState('');
+  const [resolution, setResolution] = useState('');
+  const [imageHash, setImageHash] = useState('');
+  const [quality, setQuality] = useState<FaceQualityAssessment>({
+    status: 'idle',
+    face_count: 0,
+    blur_variance: 0,
+    brightness: 0,
+    bbox: [0, 0, 0, 0],
+    landmarks: [],
+    embedding_preview: [],
+    reasons: ['Awaiting forensic image upload from user'],
+  });
+  const [candidates, setCandidates] = useState<VerificationResult[]>([]);
 
   // Evidence & Cryptographic Tree
   const [evidenceRecord, setEvidenceRecord] = useState<EvidenceRecord | null>(null);
@@ -170,8 +179,11 @@ export const App: React.FC = () => {
   );
 
   useEffect(() => {
-    initializeSample(SAMPLE_INVESTIGATIONS[0]);
-  }, [initializeSample]);
+    pushAuditEvent(
+      'TEKMERION Forensic Verification Node ready. Upload image or run live benchmark. Zero mock policy active.',
+      'info'
+    );
+  }, [pushAuditEvent]);
 
   // Execute Step-by-Step
   const handleStepNext = async () => {
@@ -441,9 +453,60 @@ export const App: React.FC = () => {
     }
   };
 
-  // Reset Pipeline
+  // Reset Pipeline to clean empty state
   const handleReset = () => {
-    initializeSample(currentSample, generateRunId());
+    const newId = generateRunId();
+    setRunId(newId);
+    setImageFileName('');
+    setImageSrc('');
+    setResolution('');
+    setImageHash('');
+    setQuality({
+      status: 'idle',
+      face_count: 0,
+      blur_variance: 0,
+      brightness: 0,
+      bbox: [0, 0, 0, 0],
+      landmarks: [],
+      embedding_preview: [],
+      reasons: ['Awaiting forensic image upload from user'],
+    });
+    setCandidates([]);
+    setEvidenceRecord(null);
+    setEvidenceBundle(null);
+    setOriginalRecord(null);
+    setBlockchainRecord(null);
+    setCurrentStage('INPUT');
+    setCompletedStages([]);
+    setStatus('idle');
+    setTamperState({
+      isTampered: false,
+      tamperedLeaf: null,
+      tamperedField: null,
+      originalValue: null,
+      tamperedValue: null,
+      originalLeafHash: null,
+      tamperedLeafHash: null,
+      originalRoot: null,
+      tamperedRoot: null,
+    });
+    pushAuditEvent(`Forensic session reset. New Run ID: ${newId}. Awaiting evidence image.`, 'info');
+  };
+
+  // Live Benchmark Handler - executes genuine pipeline on real benchmark file
+  const handleSelectSample = async (sampleId: string) => {
+    const filename = sampleId === 'case_multi_face' ? 'multi_face.jpg' : 'query_face.jpg';
+    pushAuditEvent(`Fetching benchmark asset: /${filename} for live execution...`, 'info');
+    try {
+      const resp = await fetch(`/${filename}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status} reading /${filename}`);
+      const blob = await resp.blob();
+      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+      await handleCustomImageUpload(file);
+    } catch (err: any) {
+      console.error('Benchmark fetch error:', err);
+      pushAuditEvent(`Error fetching benchmark image: ${err.message}`, 'error');
+    }
   };
 
   // Simulate Tamper Test (Mutate Title in Content Leaf #1)
@@ -819,10 +882,7 @@ export const App: React.FC = () => {
               onStepNext={handleStepNext}
               onReset={handleReset}
               onTamper={handleTamper}
-              onSelectSample={(id) => {
-                const s = SAMPLE_INVESTIGATIONS.find((i) => i.id === id);
-                if (s) initializeSample(s);
-              }}
+              onSelectSample={handleSelectSample}
               onCustomImageUpload={handleCustomImageUpload}
             />
           )}

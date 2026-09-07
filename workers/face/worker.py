@@ -200,12 +200,23 @@ def analyze_request(request):
             }
         )
 
+    # Genuine image metrics from pixel data
+    try:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        blur_variance = round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 2)
+        brightness = round(float(np.mean(gray)), 2)
+    except Exception:
+        blur_variance = 0.0
+        brightness = 128.0
+
     # Zero faces is an explicit result, not an error.
     if len(faces) == 0:
         return {
             "request_id": request_id,
             "success": True,
             "faces": [],
+            "blur_variance": blur_variance,
+            "brightness": brightness,
             "embedding": None,
             "quality": None,
             "errors": [],
@@ -217,6 +228,8 @@ def analyze_request(request):
             "request_id": request_id,
             "success": True,
             "faces": faces,
+            "blur_variance": blur_variance,
+            "brightness": brightness,
             "embedding": None,
             "quality": None,
             "errors": [],
@@ -227,6 +240,8 @@ def analyze_request(request):
         "request_id": request_id,
         "success": True,
         "faces": faces,
+        "blur_variance": blur_variance,
+        "brightness": brightness,
         "embedding": single["embedding"],
         "quality": single["quality"],
         "errors": [],

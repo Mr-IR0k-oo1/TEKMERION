@@ -64,7 +64,7 @@ export type PipelineStatus = 'idle' | 'running' | 'completed' | 'tampered' | 'er
 export type ViewTab = 'pipeline' | 'merkle' | 'tamper' | 'candidates' | 'audit';
 
 export interface FaceQualityAssessment {
-  status: 'pass' | 'fail' | 'warn';
+  status: 'pass' | 'fail' | 'warn' | 'idle';
   face_count: number;
   blur_variance: number;
   brightness: number;

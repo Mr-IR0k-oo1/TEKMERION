@@ -146,7 +146,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h4 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-              Investigation Case Profiles
+              Live Execution Profiles (Zero Mocks)
             </h4>
             {isDragging && <span className="badge badge-cyan">DROP IMAGE HERE</span>}
           </div>
@@ -158,9 +158,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               onClick={() => onSelectSample('case_single_face')}
             >
               <div>
-                <div style={{ fontWeight: 600, color: '#fff' }}>Case 1: Single Subject (Jane Doe)</div>
+                <div style={{ fontWeight: 600, color: '#fff' }}>Run Benchmark: Single Face (query_face.jpg)</div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  SCRFD single face • Passes blur & exposure gates
+                  Executes live SCRFD detection & ArcFace embedding verification
                 </div>
               </div>
             </button>
@@ -171,9 +171,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               onClick={() => onSelectSample('case_multi_face')}
             >
               <div>
-                <div style={{ fontWeight: 600, color: '#fff' }}>Case 2: Crowd Photo (Multi-Face)</div>
+                <div style={{ fontWeight: 600, color: '#fff' }}>Run Benchmark: Crowd (multi_face.jpg)</div>
                 <div style={{ fontSize: '11px', color: 'var(--amber-warn)' }}>
-                  Rejection Test: Strict MULTIPLE_FACES gate failure
+                  Live Rejection Test: Strict MULTIPLE_FACES gate failure
                 </div>
               </div>
             </button>

@@ -167,6 +167,43 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Static Candidate & Asset Serving Endpoint
+  if (req.method === 'GET' && (url.pathname.startsWith('/candidates/') || url.pathname.startsWith('/assets/'))) {
+    const cleanPath = url.pathname.replace(/^\/(api\/)?/, '');
+    const assetPath = path.resolve(process.cwd(), '..', cleanPath.startsWith('candidates/') ? `assets/${cleanPath}` : cleanPath);
+    if (fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
+      const ext = path.extname(assetPath).toLowerCase();
+      const mimeTypes: Record<string, string> = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.svg': 'image/svg+xml',
+        '.json': 'application/json',
+      };
+      res.writeHead(200, { 'Content-Type': mimeTypes[ext] || 'application/octet-stream' });
+      fs.createReadStream(assetPath).pipe(res);
+      return;
+    }
+  }
+
+  // Inspect Run Details Endpoint
+  if (req.method === 'GET' && url.pathname.startsWith('/api/runs/')) {
+    const targetRunId = url.pathname.replace('/api/runs/', '').trim();
+    const targetDir = path.resolve(process.cwd(), '..', 'runs', targetRunId);
+    if (fs.existsSync(targetDir)) {
+      const auditFile = path.join(targetDir, 'audit.jsonl');
+      const evidenceFile = path.join(targetDir, 'evidence', 'evidence.json');
+      const txFile = path.join(targetDir, 'blockchain', 'transaction.json');
+      const runData: Record<string, any> = { run_id: targetRunId };
+      if (fs.existsSync(evidenceFile)) runData.evidence = JSON.parse(fs.readFileSync(evidenceFile, 'utf-8'));
+      if (fs.existsSync(txFile)) runData.blockchain = JSON.parse(fs.readFileSync(txFile, 'utf-8'));
+      if (fs.existsSync(auditFile)) runData.audit = fs.readFileSync(auditFile, 'utf-8').trim().split('\n').map((l) => JSON.parse(l));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, run: runData }));
+      return;
+    }
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Endpoint not found' }));
 });
