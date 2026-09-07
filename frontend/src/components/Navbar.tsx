@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ViewTab } from '../types/forensic';
-import { ShieldCheck, Cpu, GitFork, AlertTriangle, Users, Terminal, Check, Copy } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Check, Copy } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: ViewTab;
@@ -10,6 +10,22 @@ interface NavbarProps {
   contractAddress: string;
   backendOnline?: boolean;
 }
+
+const TAB_FLAGS: Record<ViewTab, string> = {
+  pipeline:   '--pipeline',
+  merkle:     '--merkle',
+  tamper:     '--tamper',
+  candidates: '--candidates',
+  audit:      '--audit',
+};
+
+const TAB_LABELS: Record<ViewTab, string> = {
+  pipeline:   'Pipeline Studio',
+  merkle:     'Merkle Tree',
+  tamper:     'Tamper Lab',
+  candidates: 'Candidates',
+  audit:      'Audit',
+};
 
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
@@ -28,111 +44,66 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header>
-      {/* Top Telemetry Bar */}
-      <div className="telemetry-bar">
-        <div className="brand-section">
-          <div className="brand-logo-icon">
-            <ShieldCheck size={22} />
-          </div>
-          <div className="brand-title-group">
-            <h1>TEKMERION</h1>
-            <p>Forensic Evidence Verification Engine</p>
-          </div>
-        </div>
-
-        <div className="telemetry-stats">
-          <div className="stat-item">
-            <span className="stat-label">Backend Worker</span>
-            <span
-              className="stat-value"
-              style={{ color: backendOnline ? 'var(--emerald-verified)' : 'var(--amber-warn)' }}
-            >
-              <span className="pulse-dot" /> {backendOnline ? 'ONLINE' : 'LOCAL'}
+    <header className="nav-term-header">
+      {/* Compact telemetry strip */}
+      <div className="telemetry-strip">
+        <div className="telemetry-strip__left">
+          <span className="brand-mark">
+            <ShieldCheck size={15} />
+            <span className="brand-name">TEKMERION</span>
+          </span>
+          <span className="telemetry-sep" />
+          <span className="telemetry-chip">
+            <span className="pulse-dot" style={{ color: backendOnline ? 'var(--color-emerald)' : 'var(--color-amber)' }} />
+            <span className="telemetry-chip__label">Backend</span>
+            <span className="mono" style={{ color: backendOnline ? 'var(--color-emerald)' : 'var(--color-amber)' }}>
+              {backendOnline ? 'ONLINE' : 'LOCAL'}
             </span>
-          </div>
-
-          <div className="stat-item">
-            <span className="stat-label">Network Anchor</span>
-            <span className="stat-value" style={{ color: 'var(--violet-chain)' }}>
-              <span className="pulse-dot" /> Ethereum Sepolia
-            </span>
-          </div>
-
-          <div className="stat-item" title={contractAddress}>
-            <span className="stat-label">Registry Contract</span>
-            <span className="stat-value mono" style={{ fontSize: '12px' }}>
-              {contractAddress.substring(0, 6)}...{contractAddress.substring(contractAddress.length - 4)}
-            </span>
-          </div>
-
-          <div className="stat-item">
-            <span className="stat-label">Active Run ID</span>
-            <button
-              onClick={handleCopyRunId}
-              className="stat-value mono btn-secondary"
-              style={{
-                padding: '4px 10px',
-                fontSize: '12px',
-                borderRadius: '4px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                cursor: 'pointer',
-              }}
-            >
+          </span>
+          <span className="telemetry-chip">
+            <span className="pulse-dot" style={{ color: 'var(--color-violet)' }} />
+            <span className="telemetry-chip__label">Chain</span>
+            <span className="mono" style={{ color: 'var(--color-violet)' }}>Sepolia</span>
+          </span>
+          <span className="telemetry-chip" title={contractAddress}>
+            <span className="telemetry-chip__label">Contract</span>
+            <span className="mono">{contractAddress.slice(0, 6)}…{contractAddress.slice(-4)}</span>
+          </span>
+          <span className="telemetry-chip">
+            <span className="telemetry-chip__label">Run</span>
+            <button onClick={handleCopyRunId} className="run-id-btn mono">
               {runId}
-              {copied ? <Check size={13} color="var(--emerald-verified)" /> : <Copy size={13} />}
+              {copied
+                ? <Check size={11} style={{ color: 'var(--color-emerald)' }} />
+                : <Copy size={11} style={{ opacity: 0.5 }} />}
             </button>
-          </div>
-
-          {isTampered && (
-            <div className="badge badge-crimson" style={{ animation: 'flashRed 1.8s infinite' }}>
-              <AlertTriangle size={13} /> TAMPER DETECTED
-            </div>
-          )}
+          </span>
         </div>
+
+        {isTampered && (
+          <div className="tamper-alert-strip">
+            <AlertTriangle size={13} />
+            <span>TAMPER DETECTED</span>
+          </div>
+        )}
       </div>
 
-      {/* Navigation Tabs */}
-      <nav className="view-tabs-container">
-        <button
-          className={`view-tab-btn ${activeTab === 'pipeline' ? 'active' : ''}`}
-          onClick={() => onSelectTab('pipeline')}
-        >
-          <Cpu size={16} /> Pipeline Studio
-        </button>
-
-        <button
-          className={`view-tab-btn ${activeTab === 'merkle' ? 'active' : ''}`}
-          onClick={() => onSelectTab('merkle')}
-        >
-          <GitFork size={16} /> Merkle Tree
-        </button>
-
-        <button
-          className={`view-tab-btn ${activeTab === 'tamper' ? 'active' : ''} ${
-            isTampered ? 'tamper-active' : ''
-          }`}
-          onClick={() => onSelectTab('tamper')}
-        >
-          <AlertTriangle size={16} /> Tamper Lab
-          {isTampered && <span className="badge badge-crimson" style={{ padding: '1px 6px', fontSize: '10px' }}>ALERT</span>}
-        </button>
-
-        <button
-          className={`view-tab-btn ${activeTab === 'candidates' ? 'active' : ''}`}
-          onClick={() => onSelectTab('candidates')}
-        >
-          <Users size={16} /> Candidate Inspector
-        </button>
-
-        <button
-          className={`view-tab-btn ${activeTab === 'audit' ? 'active' : ''}`}
-          onClick={() => onSelectTab('audit')}
-        >
-          <Terminal size={16} /> Audit Explorer
-        </button>
+      {/* Terminal command nav */}
+      <nav className="nav-term">
+        <div className="nav-term__line">
+          <span className="nav-term__prompt">&gt;</span>
+          <span className="nav-term__prog">tekmerion</span>
+          {(Object.keys(TAB_FLAGS) as ViewTab[]).map((tab) => (
+            <button
+              key={tab}
+              className={`nav-term__flag ${activeTab === tab ? 'is-active' : ''} ${tab === 'tamper' && isTampered ? 'is-alert' : ''}`}
+              onClick={() => onSelectTab(tab)}
+            >
+              {TAB_FLAGS[tab]}
+            </button>
+          ))}
+          <span className="nav-term__caret" aria-hidden="true">▮</span>
+        </div>
       </nav>
     </header>
   );

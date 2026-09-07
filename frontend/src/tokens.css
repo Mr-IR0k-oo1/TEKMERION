@@ -1,0 +1,107 @@
+/* Hallmark · macrostructure: Workbench · tone: technical · anchor hue: 195 (cyan)
+ * genre: atmospheric · theme: Midnight · nav: N8 Terminal command · footer: Ft4 Dense colophon
+ * enrichment: none (typography only)
+ */
+
+:root {
+  /* ─── Paper (dark surface — anchor hue 195, chroma 0.008) ─── */
+  --color-paper:      oklch(12% 0.012 195);
+  --color-paper-2:    oklch(16% 0.014 195);
+  --color-paper-3:    oklch(20% 0.016 195);
+  --color-paper-4:    oklch(25% 0.014 195);
+  --color-paper-glass: oklch(16% 0.014 195 / 0.75);
+
+  /* ─── Ink ─── */
+  --color-ink:        oklch(94% 0.008 195);
+  --color-ink-2:      oklch(68% 0.010 210);
+  --color-ink-3:      oklch(48% 0.010 210);
+  --color-ink-mono:   oklch(72% 0.06 210);
+
+  /* ─── Accent — cyan (primary) ─── */
+  --color-accent:     oklch(82% 0.18 195);
+  --color-accent-glow: oklch(82% 0.18 195 / 0.30);
+  --color-accent-dim: oklch(82% 0.18 195 / 0.12);
+
+  /* ─── Semantic accents ─── */
+  --color-emerald:    oklch(72% 0.17 160);
+  --color-emerald-glow: oklch(72% 0.17 160 / 0.30);
+  --color-emerald-dim: oklch(72% 0.17 160 / 0.12);
+
+  --color-amber:      oklch(78% 0.16 75);
+  --color-amber-glow: oklch(78% 0.16 75 / 0.30);
+  --color-amber-dim:  oklch(78% 0.16 75 / 0.12);
+
+  --color-crimson:    oklch(63% 0.22 25);
+  --color-crimson-glow: oklch(63% 0.22 25 / 0.40);
+  --color-crimson-dim: oklch(63% 0.22 25 / 0.15);
+
+  --color-violet:     oklch(65% 0.22 300);
+  --color-violet-glow: oklch(65% 0.22 300 / 0.30);
+  --color-violet-dim: oklch(65% 0.22 300 / 0.12);
+
+  /* ─── Focus ─── */
+  --color-focus:      oklch(82% 0.18 195);
+
+  /* ─── Rules / borders ─── */
+  --color-rule:       oklch(28% 0.012 195);
+  --color-rule-glow:  oklch(82% 0.18 195 / 0.25);
+
+  /* ─── Spacing (4pt base) ─── */
+  --space-3xs:  0.125rem;  /*  2px */
+  --space-2xs:  0.25rem;   /*  4px */
+  --space-xs:   0.5rem;    /*  8px */
+  --space-sm:   0.75rem;   /* 12px */
+  --space-md:   1rem;      /* 16px */
+  --space-lg:   1.5rem;    /* 24px */
+  --space-xl:   2.5rem;    /* 40px */
+  --space-2xl:  4rem;      /* 64px */
+  --space-3xl:  6rem;      /* 96px */
+  --space-4xl:  9rem;      /* 144px */
+
+  /* ─── Typography ─── */
+  --font-display: 'Space Grotesk', 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --font-body:    'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
+
+  /* Scale — major third (1.25) */
+  --text-xs:    0.64rem;   /* 10.24px */
+  --text-sm:    0.8rem;    /* 12.8px  */
+  --text-base:  1rem;      /* 16px    */
+  --text-md:    1.25rem;   /* 20px    */
+  --text-lg:    1.5625rem; /* 25px    */
+  --text-xl:    1.9531rem; /* 31.25px */
+  --text-2xl:   2.4414rem; /* 39px    */
+  --text-3xl:   clamp(2.75rem, 5vw + 1rem, 4.5rem);
+
+  /* ─── Radii ─── */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-full: 9999px;
+
+  /* ─── Easings ─── */
+  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:      cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ─── Durations ─── */
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long:  420ms;
+
+  /* ─── Z-index scale ─── */
+  --z-base:     1;
+  --z-raised:   10;
+  --z-dropdown: 100;
+  --z-sticky:   200;
+  --z-modal:    400;
+  --z-toast:    500;
+
+  /* ─── Layout ─── */
+  --header-height: 72px;
+  --page-gutter:   clamp(1rem, 4vw, 2rem);
+  --max-width:     1400px;
+
+  /* ─── Rules ─── */
+  --rule-hair: 1px;
+}
