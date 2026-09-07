@@ -160,7 +160,7 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
                       <img src={queryImageSrc} alt="Query Face" className="candidate-thumb" />
                     </div>
                     <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>vs</span>
-                    <div title="Candidate Post Media">
+                    <div title="Candidate Repository Asset">
                       <img
                         src={candidate.thumbnail_url || candidate.image_url}
                         alt="Candidate Post"
@@ -179,12 +179,31 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
                     ) : (
                       candidate.snippet || 'No snippet description available.'
                     )}
+                    {(candidate.author || candidate.license) && (
+                      <div style={{ marginTop: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap', fontSize: '11px' }}>
+                        {candidate.provider && (
+                          <span style={{ background: 'rgba(0, 240, 255, 0.1)', color: 'var(--cyan-bright)', padding: '2px 6px', borderRadius: '3px' }}>
+                            {candidate.provider.replace('_', ' ').toUpperCase()}
+                          </span>
+                        )}
+                        {candidate.license && (
+                          <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#34d399', padding: '2px 6px', borderRadius: '3px' }}>
+                            {candidate.license}
+                          </span>
+                        )}
+                        {candidate.author && (
+                          <span style={{ color: 'var(--text-muted)' }}>
+                            by {candidate.author}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Footer: Candidate Image SHA-256 Digest */}
                 <div className="candidate-footer">
-                  <span style={{ color: 'var(--text-muted)' }}>Quality Score: {(quality * 100).toFixed(1)}%</span>
+                  <span style={{ color: 'var(--text-muted)' }}>Face Quality: {(quality * 100).toFixed(1)}%</span>
                   <span className="mono" style={{ color: 'var(--cyan-bright)' }}>
                     SHA: {candidate_image_hash.substring(0, 8)}...{candidate_image_hash.substring(candidate_image_hash.length - 6)}
                   </span>

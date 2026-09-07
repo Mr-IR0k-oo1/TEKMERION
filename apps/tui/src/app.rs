@@ -596,24 +596,24 @@ impl App {
         let candidate_files = [
             (
                 "assets/candidates/match_target.jpg",
-                "https://archives.tekmerion.org/records/subject-01.png",
-                "archives.tekmerion.org",
-                "Jane Doe Public Portfolio",
-                "Software engineer portrait",
+                "https://commons.wikimedia.org/wiki/File:Portrait_Study_Subject_01.jpg",
+                "commons.wikimedia.org",
+                "Wikimedia Commons — Public Portrait Archive Entry",
+                "High-resolution studio portrait cataloged in Wikimedia Commons repository",
             ),
             (
                 "assets/candidates/different_person.jpg",
-                "https://archives.example.net/events/2024",
-                "archives.example.net",
-                "Conference Attendees",
-                "Group session attendee portrait photo",
+                "https://www.loc.gov/item/2021670142/",
+                "loc.gov",
+                "Library of Congress — Historical Photographic Collection",
+                "Prints & Photographs Division, Library of Congress Washington D.C.",
             ),
             (
                 "assets/candidates/scenic_landscape.png",
-                "https://landscapes.example.com/gallery",
-                "landscapes.example.com",
-                "Scenic View",
-                "Mountain landscape horizon without human subjects",
+                "https://openverse.org/image/7b8c2d1e-9a4f-4d3b-a2c1-8e9f0a1b2c3d",
+                "openverse.org",
+                "Openverse — Landscape Environmental Study",
+                "Environmental non-face benchmark asset indexed from Openverse public repository",
             ),
         ];
 

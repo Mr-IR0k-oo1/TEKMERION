@@ -82,6 +82,9 @@ export interface SearchCandidate {
   thumbnail_url?: string;
   snippet: string;
   provider: string;
+  author?: string;
+  license?: string;
+  record_id?: string;
   discovered_at: string;
 }
 
