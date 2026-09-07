@@ -269,6 +269,54 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
     };
   }
 
+  if (faceResult.blur_variance < 30.0 || faceResult.quality < 0.40) {
+    const reason = faceResult.blur_variance < 30.0
+      ? `Excessive image blur (Laplacian variance ${faceResult.blur_variance.toFixed(1)} < 30.0)`
+      : `Face detection confidence too low (${faceResult.quality.toFixed(2)} < 0.40)`;
+    pushEvent(`FORENSIC GATE REJECTION: Face quality check failed: ${reason} (LOW_FACE_QUALITY)`);
+    fs.writeFileSync(
+      path.join(runDir, 'audit.jsonl'),
+      auditLog.map((e) => JSON.stringify(e)).join('\n')
+    );
+    return {
+      success: false,
+      gate_rejected: 'LOW_FACE_QUALITY',
+      error: `Forensic Gate Rejection: ${reason}. Pipeline halted before reverse image search.`,
+      run_id: runId,
+      input: {
+        filename: originalFilename,
+        sha256: inputSha256,
+        resolution: inputMeta.resolution,
+        size_bytes: inputBuffer.length,
+        file_path: inputFilePath,
+      },
+      face: {
+        face_count: 1,
+        bbox: faceResult.bbox,
+        landmarks: faceResult.landmarks,
+        embedding_preview: [],
+        quality: faceResult.quality,
+        blur_variance: faceResult.blur_variance,
+        status: 'fail',
+        reasons: [reason],
+      },
+      discovery: { provider: 'catalog', request_status: 'NOT_REACHED', raw_count: 0, unique_count: 0, candidates: [] },
+      verification: { threshold: 0.75, verified_count: 0, below_threshold_count: 0, no_face_count: 0, top_candidate: null },
+      evidence: { schema_version: '1.0.0', root_hash: '--', leaves: [], record: {} },
+      blockchain: {
+        network: 'Ethereum Sepolia Testnet',
+        contract: '0x71C2d385aE2F56d9812A45B8a9b70d41C68E3a9E',
+        block_number: 0,
+        confirmations: 0,
+        tx_hash: '--',
+        registered_root: '--',
+        verified_match: false,
+        timestamp: new Date().toISOString(),
+      },
+      audit_log: auditLog,
+    };
+  }
+
   const queryEmbedding = faceResult.full_embedding;
   pushEvent('Stage FACE_ANALYSIS passed: single face verified, 512-D ArcFace vector generated');
 
