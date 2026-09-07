@@ -9,11 +9,11 @@
 FROM rust:bookworm AS rust-builder
 WORKDIR /build
 
-COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY crates/ ./crates/
 COPY apps/ ./apps/
 
-RUN cargo build --release -p tekmerion-tui
+RUN cargo build --release -p tekmerion-tui --bin tekmerion
 
 # ------------------------------------------------------------------------------
 # Stage 2: Web UI Frontend Builder
@@ -77,8 +77,10 @@ RUN bun install
 
 RUN mkdir -p /app/runs/temp_uploads
 
+WORKDIR /app
+
 EXPOSE 3001
-CMD ["bun", "server.ts"]
+CMD ["bun", "run", "--cwd", "/app/frontend", "server.ts"]
 
 # ------------------------------------------------------------------------------
 # Stage 4: Frontend SPA Web Server (Nginx)

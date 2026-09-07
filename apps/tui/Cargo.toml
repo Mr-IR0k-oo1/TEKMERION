@@ -4,6 +4,10 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "tekmerion"
+path = "src/main.rs"
+
 [dependencies]
 tekmerion-core = { path = "../../crates/core" }
 tekmerion-config = { path = "../../crates/config" }

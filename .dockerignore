@@ -11,3 +11,4 @@ runs/temp_uploads/
 .cache/
 cargo.ps1
 cargo.bat
+rust-toolchain.toml
