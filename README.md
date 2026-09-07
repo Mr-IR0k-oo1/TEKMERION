@@ -384,7 +384,20 @@ cargo test --workspace
 .\cargo.bat test --workspace
 ```
 
-### 4. Running TEKMERION
+### 4. Docker Deployment (Complete Stack)
+
+Launch the entire TEKMERION stack (Backend API, Python Face Worker, Web UI, and TUI) with zero host dependencies:
+
+```bash
+docker compose up --build
+```
+- **Web UI**: [http://localhost:5173](http://localhost:5173)
+- **Backend API**: [http://localhost:3001/api/health](http://localhost:3001/api/health)
+- **Interactive TUI & CLI**: `docker compose run --rm tui [run|verify|tamper-test|inspect|contract-info]`
+
+For complete details, see [docs/docker.md](docs/docker.md).
+
+### 5. Running TEKMERION Locally (Cargo & Native CLI)
 
 #### Standard Live Execution
 Run against an input portrait image:

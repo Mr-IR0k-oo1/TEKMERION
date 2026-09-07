@@ -1,0 +1,13 @@
+.git
+.gitignore
+target/
+**/node_modules/
+**/dist/
+**/.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+runs/temp_uploads/
+.cache/
+cargo.ps1
+cargo.bat

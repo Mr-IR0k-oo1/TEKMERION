@@ -1,0 +1,74 @@
+# ==============================================================================
+# STAGE 1: Rust Production Binary Builder
+# ==============================================================================
+FROM rust:bookworm AS rust-builder
+WORKDIR /build
+
+# Copy manifests
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates/ ./crates/
+COPY apps/ ./apps/
+
+# Compile production binary
+RUN cargo build --release -p tekmerion-tui
+
+# ==============================================================================
+# STAGE 2: Python 3.11 + Bun Forensic Execution Runtime
+# ==============================================================================
+FROM python:3.11-slim-bookworm AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    BUN_INSTALL="/root/.bun" \
+    PATH="/root/.bun/bin:${PATH}" \
+    PORT=3001 \
+    ETH_RPC_URL="https://rpc.sepolia.org" \
+    EVIDENCE_CONTRACT_ADDRESS="0x712a7f0e014A895FdBdf0F46aA3199859fC8A79E" \
+    FACE_WORKER_PATH="/app/workers/face/worker.py"
+
+# Install system libraries required by ONNX Runtime, OpenCV, and Bun
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    libgomp1 \
+    build-essential \
+    g++ \
+    git \
+    unzip \
+    && curl -fsSL https://bun.sh/install | bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python ML dependencies (InsightFace, ArcFace, SCRFD, ONNX Runtime)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir \
+    "insightface>=0.7.3" \
+    "numpy>=1.24" \
+    "onnxruntime>=1.16" \
+    "opencv-python-headless>=4.8"
+
+WORKDIR /app
+
+# Copy compiled Rust CLI & TUI binary from stage 1
+COPY --from=rust-builder /build/target/release/tekmerion /usr/local/bin/tekmerion
+
+# Copy workspace directories
+COPY workers/ ./workers/
+COPY assets/ ./assets/
+COPY contracts/ ./contracts/
+COPY frontend/package.json ./frontend/package.json
+COPY frontend/bun.lock* ./frontend/bun.lock
+COPY frontend/tsconfig.json ./frontend/tsconfig.json
+COPY frontend/server.ts ./frontend/server.ts
+COPY frontend/src/ ./frontend/src/
+
+# Install backend dependencies
+WORKDIR /app/frontend
+RUN bun install
+
+# Create runs and uploads directory
+RUN mkdir -p /app/runs/temp_uploads
+
+EXPOSE 3001
+
+# Start the Forensic Pipeline Backend API
+CMD ["bun", "server.ts"]

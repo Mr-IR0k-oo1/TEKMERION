@@ -1,0 +1,72 @@
+services:
+  # ============================================================================
+  # TEKMERION Backend API, Python Face Worker, and Evidence Pipeline Engine
+  # ============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: tekmerion-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - ETH_RPC_URL=${ETH_RPC_URL:-https://rpc.sepolia.org}
+      - EVIDENCE_CONTRACT_ADDRESS=${EVIDENCE_CONTRACT_ADDRESS:-0x712a7f0e014A895FdBdf0F46aA3199859fC8A79E}
+      - ETH_PRIVATE_KEY=${ETH_PRIVATE_KEY:-}
+      - TEKMERION_SEARCH_API_KEY=${TEKMERION_SEARCH_API_KEY:-}
+      - FACE_WORKER_PATH=/app/workers/face/worker.py
+    volumes:
+      - tekmerion_runs:/app/runs
+      - ./assets:/app/assets:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ============================================================================
+  # TEKMERION Web Forensic Inspection UI (Nginx SPA + Reverse Proxy)
+  # ============================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: tekmerion-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # ============================================================================
+  # TEKMERION Interactive Terminal User Interface (TUI) & CLI Tooling
+  # Usage: docker compose run --rm tui [run|verify|tamper-test|inspect|contract-info]
+  # ============================================================================
+  tui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tui
+    container_name: tekmerion-tui
+    profiles:
+      - cli
+    stdin_open: true
+    tty: true
+    environment:
+      - ETH_RPC_URL=${ETH_RPC_URL:-https://rpc.sepolia.org}
+      - EVIDENCE_CONTRACT_ADDRESS=${EVIDENCE_CONTRACT_ADDRESS:-0x712a7f0e014A895FdBdf0F46aA3199859fC8A79E}
+      - ETH_PRIVATE_KEY=${ETH_PRIVATE_KEY:-}
+      - TEKMERION_SEARCH_API_KEY=${TEKMERION_SEARCH_API_KEY:-}
+      - FACE_WORKER_PATH=/app/workers/face/worker.py
+    volumes:
+      - tekmerion_runs:/app/runs
+      - ./assets:/app/assets:ro
+    entrypoint: ["/usr/local/bin/tekmerion"]
+
+volumes:
+  tekmerion_runs:
+    driver: local
