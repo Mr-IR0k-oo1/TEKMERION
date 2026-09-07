@@ -432,3 +432,20 @@ img {
   max-width: 100%;
   display: block;
 }
+
+/* ─── Code / data surface ─── */
+.code-surface {
+  background: oklch(8% 0.010 195);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.ink-strong { color: var(--color-ink); }
+.ink-2 { color: var(--color-ink-2); }
+.ink-3 { color: var(--color-ink-3); }
+.accent { color: var(--color-accent); }
+.emerald { color: var(--color-emerald); }
+.amber { color: var(--color-amber); }
+.crimson { color: var(--color-crimson); }
+.violet { color: var(--color-violet); }

@@ -160,7 +160,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               onClick={() => onSelectSample('case_single_face')}
             >
               <div>
-                <div style={{ fontWeight: 600, color: '#fff' }}>Run Benchmark: Single Face (query_face.jpg)</div>
+                <div style={{ fontWeight: 600, color: 'var(--color-ink)' }}>Run Benchmark: Single Face (query_face.jpg)</div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                   Executes live SCRFD detection & ArcFace embedding verification
                 </div>
@@ -173,8 +173,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               onClick={() => onSelectSample('case_multi_face')}
             >
               <div>
-                <div style={{ fontWeight: 600, color: '#fff' }}>Run Benchmark: Crowd (multi_face.jpg)</div>
-                <div style={{ fontSize: '11px', color: 'var(--amber-warn)' }}>
+                <div style={{ fontWeight: 600, color: 'var(--color-ink)' }}>Run Benchmark: Crowd (multi_face.jpg)</div>
+                <div style={{ fontSize: '11px', color: 'var(--color-amber)' }}>
                   Live Rejection Test: Strict MULTIPLE_FACES gate failure
                 </div>
               </div>
@@ -186,8 +186,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                 justifyContent: 'center',
                 padding: '12px 14px',
                 borderStyle: 'dashed',
-                background: 'rgba(0, 240, 255, 0.04)',
-                borderColor: 'rgba(0, 240, 255, 0.3)',
+                background: 'var(--color-accent-dim)',
+                borderColor: 'var(--color-rule-glow)',
               }}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -260,14 +260,14 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
         )}
 
         {status === 'no_match' && (
-          <div className="stage-banner" style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid var(--amber-warn)' }}>
+          <div className="stage-banner" style={{ background: 'var(--color-amber-dim)', border: '1px solid var(--color-amber)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <AlertCircle size={26} color="var(--amber-warn)" />
+              <AlertCircle size={26} color="var(--color-amber)" />
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#fbbf24' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-amber)' }}>
                   NO BIOMETRIC MATCH FOUND (BELOW 75% THRESHOLD)
                 </h3>
-                <p style={{ fontSize: '13px', opacity: 0.9, color: '#fef3c7' }}>
+                <p style={{ fontSize: '13px', opacity: 0.9, color: 'var(--color-ink-2)' }}>
                   All candidate web assets scored below the required 75.0% biometric similarity threshold. Evidence bundle creation and Ethereum Sepolia anchoring were halted.
                 </p>
               </div>
@@ -276,14 +276,14 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
         )}
 
         {quality.status === 'fail' && (
-          <div className="stage-banner" style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid var(--crimson-tamper)' }}>
+          <div className="stage-banner" style={{ background: 'var(--color-crimson-dim)', border: '1px solid var(--color-crimson)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <ShieldX size={26} color="var(--crimson-tamper)" />
+              <ShieldX size={26} color="var(--color-crimson)" />
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#ef4444' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-crimson)' }}>
                   FORENSIC INPUT GATE REJECTION ✗
                 </h3>
-                <p style={{ fontSize: '13px', opacity: 0.9, color: '#fee2e2' }}>
+                <p style={{ fontSize: '13px', opacity: 0.9, color: 'var(--color-ink-2)' }}>
                   {quality.reasons.join(', ') || 'Face detection or quality criteria not satisfied. Pipeline halted.'}
                 </p>
               </div>
@@ -323,15 +323,15 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '13px' }}>
-            <div style={{ background: '#060910', padding: '12px', borderRadius: '6px' }}>
+            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Input File: </span>
-              <strong style={{ color: '#fff' }}>{imageFileName}</strong>
+              <strong style={{ color: 'var(--color-ink)' }}>{imageFileName}</strong>
               <br />
               <span style={{ color: 'var(--text-muted)' }}>Dimensions: </span>
               <span className="mono">{resolution}</span>
             </div>
 
-            <div style={{ background: '#060910', padding: '12px', borderRadius: '6px' }}>
+            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Cryptographic SHA-256 Digest:</span>
               <div className="mono" style={{ color: 'var(--cyan-bright)', fontSize: '12px', wordBreak: 'break-all', marginTop: '4px' }}>
                 {imageHash}
@@ -355,15 +355,15 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', fontSize: '13px' }}>
-            <div style={{ background: '#060910', padding: '12px', borderRadius: '6px' }}>
+            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Detector Model:</span>
-              <div style={{ fontWeight: 600, color: '#fff' }}>SCRFD-10G (ONNX CPU)</div>
+              <div style={{ fontWeight: 600, color: 'var(--color-ink)' }}>SCRFD-10G (ONNX CPU)</div>
             </div>
-            <div style={{ background: '#060910', padding: '12px', borderRadius: '6px' }}>
+            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Embedding Architecture:</span>
-              <div style={{ fontWeight: 600, color: '#fff' }}>ArcFace ResNet-100 (512-D)</div>
+              <div style={{ fontWeight: 600, color: 'var(--color-ink)' }}>ArcFace ResNet-100 (512-D)</div>
             </div>
-            <div style={{ background: '#060910', padding: '12px', borderRadius: '6px' }}>
+            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Face Quality Verdict:</span>
               <div style={{ fontWeight: 600, color: quality.status === 'pass' ? 'var(--emerald-verified)' : 'var(--crimson-tamper)' }}>
                 {quality.status === 'pass' ? 'PASSED (Blur & Exposure OK)' : 'REJECTED (Rule Violation)'}
@@ -399,7 +399,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           </div>
 
           {topCandidate ? (
-            <div style={{ background: '#060910', padding: '16px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ background: 'var(--color-paper)', padding: '16px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
                 <img
                   src={topCandidate.candidate.thumbnail_url || topCandidate.candidate.image_url}
@@ -443,9 +443,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                 <div style={{
                   padding: '8px 12px',
                   borderRadius: '4px',
-                  background: 'rgba(245, 158, 11, 0.1)',
-                  border: '1px solid var(--amber-warn)',
-                  color: '#fbbf24',
+                  background: 'var(--color-amber-dim)',
+                  border: '1px solid var(--color-amber)',
+                  color: 'var(--color-amber)',
                   fontSize: '11px',
                   display: 'flex',
                   alignItems: 'center',
@@ -482,7 +482,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '13px' }}>
-            <div style={{ background: '#060910', padding: '12px', borderRadius: '6px' }}>
+            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Local Merkle Root (RFC 8785):</span>
               <div
                 className="mono"
@@ -501,7 +501,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               </div>
             </div>
 
-            <div style={{ background: '#060910', padding: '12px', borderRadius: '6px' }}>
+            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Sepolia Anchored Root:</span>
               <div
                 className="mono"
@@ -523,9 +523,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                 marginTop: '12px',
                 padding: '10px 14px',
                 borderRadius: '4px',
-                background: 'rgba(245, 158, 11, 0.08)',
-                border: '1px solid rgba(245, 158, 11, 0.3)',
-                color: '#fbbf24',
+                background: 'var(--color-amber-dim)',
+                border: '1px solid oklch(78% 0.16 75 / 0.3)',
+                color: 'var(--color-amber)',
                 fontSize: '12px',
                 display: 'flex',
                 alignItems: 'center',
@@ -541,8 +541,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
 
           {blockchainRecord && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '12px', color: 'var(--text-secondary)' }}>
-              <span>Transaction Hash: <span className="mono" style={{ color: '#fff' }}>{blockchainRecord.tx_hash.substring(0, 16)}...</span></span>
-              <span>Block: <span className="mono" style={{ color: '#fff' }}>#{blockchainRecord.block_number}</span></span>
+              <span>Transaction Hash: <span className="mono" style={{ color: 'var(--color-ink)' }}>{blockchainRecord.tx_hash.substring(0, 16)}...</span></span>
+              <span>Block: <span className="mono" style={{ color: 'var(--color-ink)' }}>#{blockchainRecord.block_number}</span></span>
               <span>Confirmations: <span className="mono" style={{ color: 'var(--emerald-verified)' }}>{blockchainRecord.confirmations} blocks</span></span>
             </div>
           )}

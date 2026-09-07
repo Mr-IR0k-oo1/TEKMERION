@@ -148,7 +148,7 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)' }}>
                     <span>0% Non-Match</span>
-                    <span style={{ color: '#fff', fontWeight: 600 }}>Threshold: 80.0%</span>
+                    <span style={{ color: 'var(--color-ink)', fontWeight: 600 }}>Threshold: 80.0%</span>
                     <span>100% Exact</span>
                   </div>
                 </div>
@@ -182,12 +182,12 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
                     {(candidate.author || candidate.license) && (
                       <div style={{ marginTop: '6px', display: 'flex', gap: '6px', flexWrap: 'wrap', fontSize: '11px' }}>
                         {candidate.provider && (
-                          <span style={{ background: 'rgba(0, 240, 255, 0.1)', color: 'var(--cyan-bright)', padding: '2px 6px', borderRadius: '3px' }}>
+                          <span style={{ background: 'var(--color-accent-dim)', color: 'var(--color-accent)', padding: '2px 6px', borderRadius: '3px' }}>
                             {candidate.provider.replace('_', ' ').toUpperCase()}
                           </span>
                         )}
                         {candidate.license && (
-                          <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#34d399', padding: '2px 6px', borderRadius: '3px' }}>
+                          <span style={{ background: 'var(--color-emerald-dim)', color: 'var(--color-emerald)', padding: '2px 6px', borderRadius: '3px' }}>
                             {candidate.license}
                           </span>
                         )}

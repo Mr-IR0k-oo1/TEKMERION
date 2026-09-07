@@ -1,0 +1,9 @@
+{
+  "date": "2026-09-07",
+  "font_stack": "Outfit + JetBrains Mono (+ Space Grotesk display) via Google Fonts (index.html)",
+  "palette": "Cyber-forensic dark theme, now OKLCH tokens (src/tokens.css)",
+  "motion": "motion-cut (no library; CSS @keyframes + canvas-confetti)",
+  "spacing": "Hallmark 4pt scale (src/tokens.css --space-*)",
+  "framework": "React 19 + Vite 6 SPA",
+  "styling": "Vanilla CSS: tokens.css, index.css + 5 view stylesheets"
+}

@@ -210,23 +210,15 @@ export const AuditExplorer: React.FC<AuditExplorerProps> = ({
         {/* Right Column: File Content Inspector or Terminal View */}
         <div className="audit-terminal-card">
           <div className="terminal-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div className="terminal-dots">
-                <span className="dot dot-red" />
-                <span className="dot dot-yellow" />
-                <span className="dot dot-green" />
-              </div>
-              <span className="mono" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                {selectedFile}
-              </span>
-            </div>
+            <span className="terminal-title">
+              <Terminal size={13} /> audit — {selectedFile}
+            </span>
 
             <button
-              className="btn btn-secondary"
-              style={{ padding: '4px 8px', fontSize: '11px' }}
+              className="btn btn-secondary copy-btn"
               onClick={handleCopyContent}
             >
-              {copied ? <Check size={13} color="var(--emerald-verified)" /> : <Copy size={13} />} Copy
+              {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
 
@@ -253,15 +245,7 @@ export const AuditExplorer: React.FC<AuditExplorerProps> = ({
             </div>
           ) : (
             <pre
-              className="mono"
-              style={{
-                padding: '18px',
-                fontSize: '12px',
-                lineHeight: 1.6,
-                color: '#38bdf8',
-                overflowX: 'auto',
-                maxHeight: '520px',
-              }}
+              className="json-code-block"
             >
               {getFileContent(selectedFile)}
             </pre>

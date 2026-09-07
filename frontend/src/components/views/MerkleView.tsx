@@ -350,7 +350,7 @@ export const MerkleView: React.FC<MerkleViewProps> = ({
         <div className="inspector-drawer">
           <div className="drawer-header">
             <div>
-              <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--cyan-bright)' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--color-accent)' }}>
                 {selectedNode.title}
               </h3>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -370,7 +370,7 @@ export const MerkleView: React.FC<MerkleViewProps> = ({
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               SHA-256 Node Hash
             </span>
-            <div className="mono" style={{ background: '#060910', padding: '8px 12px', borderRadius: '4px', color: 'var(--cyan-bright)', marginTop: '4px', wordBreak: 'break-all' }}>
+            <div className="mono" style={{ background: 'var(--color-paper)', padding: '8px 12px', borderRadius: '4px', color: 'var(--color-accent)', marginTop: '4px', wordBreak: 'break-all' }}>
               {selectedNode.hash}
             </div>
           </div>

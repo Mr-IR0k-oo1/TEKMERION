@@ -249,14 +249,14 @@ export const TamperLab: React.FC<TamperLabProps> = ({
 
           {/* Pinpointed Discrepancy Breakdown */}
           {isTampered && (
-            <div style={{ background: 'rgba(239, 68, 68, 0.08)', padding: '16px', borderRadius: '6px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+            <div style={{ background: 'var(--color-crimson-dim)', padding: '16px', borderRadius: '6px', border: '1px solid oklch(63% 0.22 25 / 0.3)' }}>
               <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--crimson-tamper)', textTransform: 'uppercase', marginBottom: '8px' }}>
                 Forensic Discrepancy Isolation:
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Compromised Leaf: </span>
-                  <strong style={{ color: '#fff' }}>{tamperState.tamperedLeaf || 'CONTENT (Leaf #1)'}</strong>
+                  <strong style={{ color: 'var(--color-ink)' }}>{tamperState.tamperedLeaf || 'CONTENT (Leaf #1)'}</strong>
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-muted)' }}>Mutated Field: </span>

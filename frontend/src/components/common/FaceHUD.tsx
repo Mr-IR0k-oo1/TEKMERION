@@ -93,7 +93,7 @@ export const FaceHUD: React.FC<FaceHUDProps> = ({
             style={{
               left: `${(lm[0] / 1000) * 100}%`,
               top: `${(lm[1] / 1000) * 100}%`,
-              backgroundColor: isMultipleFaces ? 'var(--crimson-tamper)' : '#fff',
+              backgroundColor: isMultipleFaces ? 'var(--color-crimson)' : 'var(--color-ink)',
             }}
           />
         ))}
@@ -159,7 +159,7 @@ export const FaceHUD: React.FC<FaceHUDProps> = ({
       </div>
 
       {/* ArcFace 512-D Embedding Preview */}
-      <div style={{ background: '#050810', padding: '12px', borderRadius: '6px', border: '1px solid var(--border-dim)' }}>
+      <div className="code-surface" style={{ padding: '12px', border: '1px solid var(--color-rule)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: '6px', color: 'var(--text-muted)' }}>
           <span>ArcFace r100 L2 Embedding</span>
           <span className="mono">512-D Normalized Vector</span>
@@ -187,11 +187,11 @@ export const FaceHUD: React.FC<FaceHUDProps> = ({
       {/* Quality Rejection Warning if applicable */}
       {quality.status === 'fail' && (
         <div style={{
-          background: 'rgba(239, 68, 68, 0.1)',
+          background: 'var(--color-crimson-dim)',
           border: '1px solid var(--crimson-tamper)',
           padding: '10px 14px',
           borderRadius: '6px',
-          color: '#ff6b6b',
+          color: 'var(--color-crimson)',
           fontSize: '12px',
           display: 'flex',
           gap: '8px',
