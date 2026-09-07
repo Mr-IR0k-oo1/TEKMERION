@@ -2,51 +2,51 @@
 
 :root {
   /* ─── Background ─── */
-  --color-bg: #FBFBFA;
+  --color-bg: #111111;
 
   /* ─── Surfaces ─── */
-  --color-surface: #FFFFFF;
-  --color-surface-secondary: #F9F9F8;
-  --color-surface-tertiary: #F4F4F4;
-  --color-surface-elevated: #FFFFFF;
+  --color-surface: #1A1A1A;
+  --color-surface-secondary: #222222;
+  --color-surface-tertiary: #2A2A2A;
+  --color-surface-elevated: #1F1F1F;
 
   /* ─── Text ─── */
-  --color-text: #111111;
-  --color-text-secondary: #787774;
-  --color-text-tertiary: #A0A0A0;
-  --color-text-quaternary: #C4C4C4;
+  --color-text: #FBFBFA;
+  --color-text-secondary: #A0A0A0;
+  --color-text-tertiary: #787774;
+  --color-text-quaternary: #555555;
 
   /* ─── Accent ─── */
-  --color-accent: #111111;
-  --color-accent-hover: #333333;
-  --color-accent-active: #000000;
-  --color-accent-dim: rgba(17, 17, 17, 0.05);
-  --color-accent-subtle: rgba(17, 17, 17, 0.03);
+  --color-accent: #FFFFFF;
+  --color-accent-hover: #E0E0E0;
+  --color-accent-active: #CCCCCC;
+  --color-accent-dim: rgba(255, 255, 255, 0.1);
+  --color-accent-subtle: rgba(255, 255, 255, 0.05);
 
   /* ─── Semantic: Success (Pale Green) ─── */
-  --color-success: #346538;
-  --color-success-dim: #EDF3EC;
+  --color-success: #4CAF50;
+  --color-success-dim: rgba(76, 175, 80, 0.15);
 
   /* ─── Semantic: Warning (Pale Yellow) ─── */
-  --color-warning: #956400;
-  --color-warning-dim: #FBF3DB;
+  --color-warning: #FFC107;
+  --color-warning-dim: rgba(255, 193, 7, 0.15);
 
   /* ─── Semantic: Error (Pale Red) ─── */
-  --color-error: #9F2F2D;
-  --color-error-dim: #FDEBEC;
+  --color-error: #F44336;
+  --color-error-dim: rgba(244, 67, 54, 0.15);
 
   /* ─── Semantic: Info (Pale Blue) ─── */
-  --color-info: #1F6C9F;
-  --color-info-dim: #E1F3FE;
+  --color-info: #2196F3;
+  --color-info-dim: rgba(33, 150, 243, 0.15);
 
   /* ─── Borders ─── */
-  --color-border: #EAEAEA;
-  --color-border-secondary: #F0F0F0;
-  --color-border-focus: #111111;
+  --color-border: #333333;
+  --color-border-secondary: #444444;
+  --color-border-focus: #FFFFFF;
 
   /* ─── Overlays ─── */
-  --color-overlay: rgba(255, 255, 255, 0.8);
-  --color-scrim: rgba(255, 255, 255, 0.95);
+  --color-overlay: rgba(0, 0, 0, 0.8);
+  --color-scrim: rgba(0, 0, 0, 0.95);
 
   /* ─── Spacing (4pt base) ─── */
   --space-0: 0;

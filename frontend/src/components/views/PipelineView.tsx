@@ -153,38 +153,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>
-              LOCAL VALIDATION TESTS
-            </div>
-            <button
-              className={`btn btn-secondary ${imageFileName.includes('query_face') ? 'active' : ''}`}
-              style={{ justifyContent: 'flex-start', textAlign: 'left', padding: '10px 14px' }}
-              onClick={() => onSelectSample('case_single_face')}
-            >
-              <div>
-                <div style={{ fontWeight: 600, color: 'var(--color-ink)' }}>Run Benchmark: Single Face (query_face.jpg)</div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Executes live SCRFD detection & ArcFace embedding verification
-                </div>
-              </div>
-            </button>
 
-            <button
-              className={`btn btn-secondary ${imageFileName.includes('multi_face') ? 'active' : ''}`}
-              style={{ justifyContent: 'flex-start', textAlign: 'left', padding: '10px 14px' }}
-              onClick={() => onSelectSample('case_multi_face')}
-            >
-              <div>
-                <div style={{ fontWeight: 600, color: 'var(--color-ink)' }}>Run Benchmark: Crowd (multi_face.jpg)</div>
-                <div style={{ fontSize: '11px', color: 'var(--color-amber)' }}>
-                  Live Rejection Test: Strict MULTIPLE_FACES gate failure
-                </div>
-              </div>
-            </button>
-
-            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginTop: '12px', marginBottom: '4px' }}>
-              LIVE DISCOVERY RUN
-            </div>
             <button
               className="btn btn-secondary"
               style={{

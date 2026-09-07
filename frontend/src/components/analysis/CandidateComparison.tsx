@@ -28,7 +28,6 @@ export const CandidateComparison: React.FC<CandidateComparisonProps> = ({
           <img src={queryImageSrc} alt="Original image" />
           <span className="comparison-image-label">Original</span>
         </div>
-        <div className="comparison-vs">vs</div>
         <div className="comparison-image">
           <img
             src={candidate.candidate.thumbnail_url || candidate.candidate.image_url}

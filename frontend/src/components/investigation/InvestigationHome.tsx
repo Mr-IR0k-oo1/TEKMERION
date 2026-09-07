@@ -144,30 +144,7 @@ export const InvestigationHome: React.FC<InvestigationHomeProps> = ({ onImageSel
           </div>
         </section>
 
-        {onOpenBenchmark && (
-          <section style={{ animationDelay: '160ms' }}>
-            <h2 style={{ fontSize: 'var(--text-base)', marginBottom: 'var(--space-3)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <FileJson size={16} strokeWidth={2} />
-              Benchmarks
-            </h2>
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <button 
-                onClick={() => onOpenBenchmark('case_single_face')}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-4)', background: 'transparent', border: 'none', borderBottom: '1px solid var(--color-border)', color: 'var(--color-text)', cursor: 'pointer', textAlign: 'left', fontSize: 'var(--text-sm)' }}
-              >
-                <span>Single-face verification</span>
-                <ChevronRight size={16} color="var(--color-text-tertiary)" />
-              </button>
-              <button 
-                onClick={() => onOpenBenchmark('case_multi_face')}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-4)', background: 'transparent', border: 'none', color: 'var(--color-text)', cursor: 'pointer', textAlign: 'left', fontSize: 'var(--text-sm)' }}
-              >
-                <span>Multi-face rejection</span>
-                <ChevronRight size={16} color="var(--color-text-tertiary)" />
-              </button>
-            </div>
-          </section>
-        )}
+
       </aside>
     </div>
   );

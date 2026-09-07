@@ -135,8 +135,6 @@ export const TamperLab: React.FC<TamperLabProps> = ({
           </div>
         </div>
 
-        <div className="tamper-vs">vs</div>
-
         <div className={`tamper-column ${isTampered ? 'is-modified' : ''}`}>
           <span className="tamper-column-title">Modified Evidence</span>
           <span className="tamper-column-sub">
