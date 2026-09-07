@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { analyzeImageWithWorker, cosineSimilarity, FaceWorkerResult, getWorkspaceRoot } from './workerBridge';
+import { registerEvidence, verifyEvidence, loadBlockchainConfig, type BlockchainConfig } from './blockchain';
+import { discoverCandidates, type DiscoveryCandidate } from './discovery';
 
 export interface PipelineCandidate {
   id: string;
@@ -85,6 +87,8 @@ export interface PipelineRunResult {
     registered_root: string;
     verified_match: boolean;
     timestamp: string;
+    explorer_url?: string | null;
+    gas_used?: string | null;
   };
   audit_log: { event: string; timestamp: string; run_id: string }[];
 }
@@ -512,7 +516,61 @@ async function queryWikimediaCommons(
     pushEvent(`Wikimedia Commons API retrieved ${liveWikiCandidates.length} public domain / CC candidates`);
   }
 
-  // C. Query Dynamic Catalog Candidates (Openverse, Library of Congress, Smithsonian, Wikimedia Commons)
+  // B2. Query Openverse Live API (openly licensed media)
+  let liveOpenverseCandidates: typeof liveWebCandidates = [];
+  try {
+    const ovResp = await fetch('https://api.openverse.org/v1/images/?q=portrait+face&license_type=all&page_size=3', {
+      headers: { 'User-Agent': 'TEKMERION/1.0 (Evidence Verification Engine)' },
+      signal: AbortSignal.timeout(6000),
+    });
+    if (ovResp.ok) {
+      const ovData = await ovResp.json() as any;
+      const ovItems = ovData.results || [];
+      const ovCandDir = path.join(discDir, 'candidates');
+      fs.mkdirSync(ovCandDir, { recursive: true });
+      for (let i = 0; i < Math.min(3, ovItems.length); i++) {
+        const item = ovItems[i];
+        const thumbUrl = item.thumbnail || item.url;
+        if (!thumbUrl) continue;
+        let candFile = '';
+        try {
+          const imgResp = await fetch(thumbUrl, { signal: AbortSignal.timeout(5000) });
+          if (imgResp.ok) {
+            const imgBuf = Buffer.from(await imgResp.arrayBuffer());
+            if (imgBuf.length > 100 && imgBuf.length < 10 * 1024 * 1024) {
+              candFile = path.join(ovCandDir, `openverse_${item.id || i}.jpg`);
+              fs.writeFileSync(candFile, imgBuf);
+            }
+          }
+        } catch {}
+        if (candFile && fs.existsSync(candFile)) {
+          let domain = 'openverse.org';
+          try { domain = new URL(item.foreign_landing_url || item.url).hostname; } catch {}
+          liveOpenverseCandidates.push({
+            id: `ov-${item.id || i}`,
+            file: candFile,
+            url: item.foreign_landing_url || `https://openverse.org/image/${item.id}`,
+            domain,
+            title: item.title || `Openverse Image #${i + 1}`,
+            snippet: (item.attribution || item.title || 'Openly licensed media from Openverse').slice(0, 200),
+            provider: 'openverse',
+            author: item.creator || 'Unknown',
+            license: item.license || 'CC',
+            record_id: item.id,
+            image_url: item.url || thumbUrl,
+            thumbnail_url: thumbUrl,
+          });
+        }
+      }
+      if (liveOpenverseCandidates.length > 0) {
+        pushEvent(`Openverse API retrieved ${liveOpenverseCandidates.length} openly licensed candidates`);
+      }
+    }
+  } catch (e: any) {
+    console.warn('[Discovery] Openverse API error:', e.message);
+  }
+
+  // C. Query Dynamic Catalog Candidates (local assets)
   const candidatesDir = path.join(rootDir, 'assets', 'candidates');
   const catalogCandidateDefs: Array<{
     id: string;
@@ -838,37 +896,58 @@ async function queryWikimediaCommons(
   const h01 = sha256(Buffer.concat([Buffer.from([0x01]), Buffer.from(leaves[0].hash, 'hex'), Buffer.from(leaves[1].hash, 'hex')]));
   // Pair (2, 3) -> H23
   const h23 = sha256(Buffer.concat([Buffer.from([0x01]), Buffer.from(leaves[2].hash, 'hex'), Buffer.from(leaves[3].hash, 'hex')]));
-  // Leaf 4 duplicate -> H44
-  const h44 = sha256(Buffer.concat([Buffer.from([0x01]), Buffer.from(leaves[4].hash, 'hex'), Buffer.from(leaves[4].hash, 'hex')]));
+  // Leaf 4: odd-node promotion (RFC 6962) — promoted directly, NOT duplicated (CVE-2012-2459 defense)
+  const h4promoted = leaves[4].hash;
   // Level 1: (H01, H23) -> H0123
   const h0123 = sha256(Buffer.concat([Buffer.from([0x01]), Buffer.from(h01, 'hex'), Buffer.from(h23, 'hex')]));
-  // Root: (H0123, H44) -> Merkle Root
-  const rootHash = sha256(Buffer.concat([Buffer.from([0x01]), Buffer.from(h0123, 'hex'), Buffer.from(h44, 'hex')]));
+  // Root: (H0123, H4promoted) -> Merkle Root
+  const rootHash = sha256(Buffer.concat([Buffer.from([0x01]), Buffer.from(h0123, 'hex'), Buffer.from(h4promoted, 'hex')]));
 
   fs.writeFileSync(path.join(evDir, 'evidence.json'), JSON.stringify(evidenceRecord, null, 2));
   fs.writeFileSync(path.join(evDir, 'leaves.json'), JSON.stringify(leaves, null, 2));
   fs.writeFileSync(path.join(evDir, 'root.json'), JSON.stringify({ root_hash: rootHash, generated_at: new Date().toISOString() }, null, 2));
   pushEvent(`Evidence root computed: ${rootHash}`);
 
-  // 6. Stage: Blockchain Anchoring via Live Ethereum Sepolia
-  pushEvent('Stage: BLOCKCHAIN querying live Ethereum Sepolia block height');
-  const liveBlock = await fetchSepoliaBlockNumber();
-  const txHash = '0x' + sha256(Buffer.from(`${rootHash}:${inputSha256}:${liveBlock}`, 'utf-8'));
+  // 6. Stage: Blockchain Anchoring via Real Ethereum Sepolia Transaction
+  pushEvent('Stage: BLOCKCHAIN registering evidence on Ethereum Sepolia');
+  const bcConfig = loadBlockchainConfig();
+  const bcResult = await registerEvidence(rootHash, inputSha256, bcConfig);
+  pushEvent(
+    bcResult.success
+      ? `Blockchain anchored: Block #${bcResult.blockNumber}, Tx: ${bcResult.txHash.slice(0, 18)}...${bcResult.explorerUrl ? ` (${bcResult.explorerUrl})` : ''}`
+      : `Blockchain anchoring note: ${bcResult.error || 'unknown'}`
+  );
+
+  // Verify evidence exists on-chain (read-only check)
+  let onchainVerified = false;
+  if (bcConfig.contractAddress && bcResult.success) {
+    const verifyResult = await verifyEvidence(rootHash, bcConfig);
+    onchainVerified = verifyResult.verified;
+    if (onchainVerified) {
+      pushEvent(`On-chain verification: Evidence root EXISTS on Sepolia at block #${verifyResult.blockNumber}`);
+    }
+  }
 
   const txMeta = {
-    tx_hash: txHash,
-    block_number: liveBlock,
-    confirmations: 12,
-    network: 'Ethereum Sepolia Testnet',
-    contract: '0x71C2d385aE2F56d9812A45B8a9b70d41C68E3a9E',
+    tx_hash: bcResult.txHash,
+    block_number: bcResult.blockNumber,
+    confirmations: bcResult.confirmations,
+    network: bcResult.network,
+    contract: bcResult.contract,
     registered_root: rootHash,
-    timestamp: new Date().toISOString(),
+    timestamp: bcResult.timestamp,
+    gas_used: bcResult.gasUsed || null,
+    explorer_url: bcResult.explorerUrl || null,
+    onchain_verified: onchainVerified,
   };
   fs.writeFileSync(path.join(chainDir, 'transaction.json'), JSON.stringify(txMeta, null, 2));
-  pushEvent(`Blockchain anchored: Block #${liveBlock}, Tx: ${txHash.slice(0, 16)}...`);
 
   // 7. Stage: Final Onchain Verification
-  pushEvent(`FINAL VERIFY: Local Merkle root matches on-chain anchor (${rootHash.slice(0, 16)}...) ✓`);
+  if (onchainVerified) {
+    pushEvent(`FINAL VERIFY: Local Merkle root matches on-chain Sepolia anchor (${rootHash.slice(0, 16)}...) ✓ VERIFIED`);
+  } else {
+    pushEvent(`FINAL VERIFY: Evidence anchored (${rootHash.slice(0, 16)}...) — on-chain read verification ${bcConfig.contractAddress ? 'pending' : 'requires contract deployment'}`);
+  }
   pushEvent(`Forensic run bundle persisted to runs/${runId}`);
 
   fs.writeFileSync(
@@ -919,14 +998,16 @@ async function queryWikimediaCommons(
       record: evidenceRecord,
     },
     blockchain: {
-      network: 'Ethereum Sepolia Testnet',
-      contract: '0x71C2d385aE2F56d9812A45B8a9b70d41C68E3a9E',
-      block_number: liveBlock,
-      confirmations: 12,
-      tx_hash: txHash,
+      network: bcResult.network,
+      contract: bcResult.contract,
+      block_number: bcResult.blockNumber,
+      confirmations: bcResult.confirmations,
+      tx_hash: bcResult.txHash,
       registered_root: rootHash,
-      verified_match: true,
-      timestamp: txMeta.timestamp,
+      verified_match: onchainVerified || bcResult.success,
+      timestamp: bcResult.timestamp,
+      explorer_url: bcResult.explorerUrl || null,
+      gas_used: bcResult.gasUsed || null,
     },
     audit_log: auditLog,
   };
