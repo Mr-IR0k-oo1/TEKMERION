@@ -38,6 +38,7 @@ worker never silently selects one, so the top-level `embedding`/`quality` are
 `null` when the face count is not exactly one.
 """
 
+import contextlib
 import json
 import os
 import sys
@@ -115,8 +116,9 @@ class FaceAnalyzer:
     def prepare(self):
         if self.app is not None or not self.available:
             return
-        self.app = FaceAnalysis(providers=["CPUExecutionProvider"])
-        self.app.prepare(ctx_id=0, det_size=(640, 640))
+        with contextlib.redirect_stdout(sys.stderr):
+            self.app = FaceAnalysis(providers=["CPUExecutionProvider"])
+            self.app.prepare(ctx_id=0, det_size=(640, 640))
         log("insightface initialized")
 
 
@@ -157,7 +159,8 @@ def analyze_request(request):
         if image is None:
             return build_request_error(request_id, "failed to decode image: %s" % path)
 
-        results = ANALYZER.app.get(image)
+        with contextlib.redirect_stdout(sys.stderr):
+            results = ANALYZER.app.get(image)
     except Exception as exc:
         log("analysis error for request %s: %s" % (request_id, exc))
         return build_request_error(request_id, "analysis failed: %s" % exc)

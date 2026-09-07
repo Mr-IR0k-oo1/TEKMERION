@@ -26,13 +26,41 @@ use tekmerion_core::{FaceAnalysis, InputPayload};
 use crate::error::FaceWorkerError;
 use crate::protocol::WorkerResponse;
 
-/// Friendly default interpreter name for the current platform.
-fn default_python() -> &'static str {
-    if cfg!(windows) {
-        "python"
-    } else {
-        "python3"
+/// Friendly default interpreter name for the current platform, preferring local venv if present.
+fn default_python() -> String {
+    if let Ok(p) = std::env::var("PYTHON_PATH") {
+        return p;
     }
+    let candidates = [
+        "workers/face/.venv/Scripts/python.exe",
+        "../../workers/face/.venv/Scripts/python.exe",
+        "workers/face/.venv/bin/python",
+        "../../workers/face/.venv/bin/python",
+    ];
+    for c in candidates {
+        if Path::new(c).is_file() {
+            return c.to_string();
+        }
+    }
+    if cfg!(windows) {
+        "python".to_string()
+    } else {
+        "python3".to_string()
+    }
+}
+
+fn default_script() -> PathBuf {
+    let candidates = [
+        "workers/face/worker.py",
+        "../../workers/face/worker.py",
+    ];
+    for c in candidates {
+        let p = PathBuf::from(c);
+        if p.is_file() {
+            return p;
+        }
+    }
+    PathBuf::from("workers/face/worker.py")
 }
 
 /// Configuration for launching and talking to the face-analysis worker.
@@ -49,8 +77,8 @@ pub struct FaceWorkerConfig {
 impl Default for FaceWorkerConfig {
     fn default() -> Self {
         Self {
-            python: default_python().to_string(),
-            script: PathBuf::from("workers/face/worker.py"),
+            python: default_python(),
+            script: default_script(),
             request_timeout: Duration::from_secs(30),
         }
     }
@@ -299,6 +327,9 @@ fn spawn_reader(
                 Ok(Some(line)) => {
                     let line = line.trim();
                     if line.is_empty() {
+                        continue;
+                    }
+                    if line.starts_with("Applied providers:") || line.starts_with("find model:") {
                         continue;
                     }
                     match serde_json::from_str::<WorkerResponse>(line) {
