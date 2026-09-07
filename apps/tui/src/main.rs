@@ -11,17 +11,22 @@ use tekmerion_tui::ui;
 struct CliOptions {
     image_path: Option<String>,
     demo_mode: bool,
+    json_mode: bool,
 }
 
 fn parse_cli_args(args: &[String]) -> CliOptions {
     let mut image_path = None;
     let mut demo_mode = false;
+    let mut json_mode = false;
     let mut iter = args.iter().skip(1);
 
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--demo" | "-d" => {
                 demo_mode = true;
+            }
+            "--json" | "-j" => {
+                json_mode = true;
             }
             "-i" | "--image" => {
                 image_path = iter.next().cloned();
@@ -38,14 +43,19 @@ fn parse_cli_args(args: &[String]) -> CliOptions {
         }
     }
 
-    // Default to assets/query_face.png if no path was provided and the asset exists
-    if image_path.is_none() && std::path::Path::new("assets/query_face.png").is_file() {
-        image_path = Some("assets/query_face.png".to_string());
+    // Default to assets/query_face.jpg or assets/query_face.png if no path was provided
+    if image_path.is_none() {
+        if std::path::Path::new("assets/query_face.jpg").is_file() {
+            image_path = Some("assets/query_face.jpg".to_string());
+        } else if std::path::Path::new("assets/query_face.png").is_file() {
+            image_path = Some("assets/query_face.png".to_string());
+        }
     }
 
     CliOptions {
         image_path,
         demo_mode,
+        json_mode,
     }
 }
 
@@ -61,6 +71,7 @@ fn main() -> Result<()> {
         println!("OPTIONS:");
         println!("    -i, --image <PATH>    Path to input image file");
         println!("    -d, --demo            Run in deterministic demo mode with local simulation");
+        println!("    -j, --json            Run headlessly and output structured JSON bundle to stdout");
         println!("    -h, --help            Print help information\n");
         println!("KEYBINDINGS:");
         println!("    [ENTER] Run           Start forensic verification pipeline");
@@ -71,13 +82,31 @@ fn main() -> Result<()> {
         println!("    [?]     Help          Toggle architecture and interactive guide");
         println!("    [Q]     Quit          Exit cleanly and restore terminal\n");
         println!("EXAMPLES:");
-        println!("    cargo run -p tekmerion-tui -- assets/query_face.png");
-        println!("    cargo run -p tekmerion-tui -- run assets/query_face.png");
+        println!("    cargo run -p tekmerion-tui -- assets/query_face.jpg");
+        println!("    cargo run -p tekmerion-tui -- run assets/query_face.jpg");
+        println!("    cargo run -p tekmerion-tui -- --json assets/query_face.jpg");
         println!("    cargo run -p tekmerion-tui -- --demo\n");
         return Ok(());
     }
 
     let opts = parse_cli_args(&args);
+
+    if opts.json_mode {
+        let mut app = match opts.image_path {
+            Some(path) => App::from_image_path(path),
+            None => {
+                let mut a = App::new();
+                a.demo_mode = false;
+                a
+            }
+        };
+        app.demo_mode = opts.demo_mode;
+        app.run_full_pipeline();
+        let json_output = app.to_json_result();
+        println!("{}", serde_json::to_string_pretty(&json_output)?);
+        return Ok(());
+    }
+
     install_panic_hook();
     let mut terminal = init_terminal()?;
     let result = run(&mut terminal, opts);
@@ -124,7 +153,11 @@ fn restore_terminal() -> Result<()> {
 fn run(terminal: &mut DefaultTerminal, opts: CliOptions) -> Result<()> {
     let mut app = match opts.image_path {
         Some(path) => App::from_image_path(path),
-        None => App::new(),
+        None => {
+            let mut a = App::new();
+            a.demo_mode = false;
+            a
+        }
     };
     app.demo_mode = opts.demo_mode;
     loop {
