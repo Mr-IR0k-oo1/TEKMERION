@@ -6,17 +6,20 @@ rust-version.workspace = true
 
 [dependencies]
 tekmerion-core = { path = "../../crates/core" }
+tekmerion-config = { path = "../../crates/config" }
+tekmerion-security = { path = "../../crates/security" }
 tekmerion-face = { path = "../../crates/face" }
+tekmerion-discovery = { path = "../../crates/discovery" }
+tekmerion-verification = { path = "../../crates/verification" }
+tekmerion-evidence = { path = "../../crates/evidence" }
+tekmerion-storage = { path = "../../crates/storage" }
+tekmerion-blockchain = { path = "../../crates/blockchain" }
+tekmerion-audit = { path = "../../crates/audit" }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 url = { workspace = true }
-tekmerion-verification = { path = "../../crates/verification" }
-tekmerion-evidence = { path = "../../crates/evidence" }
-tekmerion-discovery = { path = "../../crates/discovery" }
-tekmerion-blockchain = { path = "../../crates/blockchain" }
-tekmerion-audit = { path = "../../crates/audit" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
