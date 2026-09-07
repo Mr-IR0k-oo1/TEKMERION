@@ -119,22 +119,35 @@ async function searchGoogleLens(
   candDir: string
 ): Promise<DiscoveryCandidate[]> {
   const imageBuffer = fs.readFileSync(imagePath);
-  const imageBase64 = imageBuffer.toString('base64');
   const ext = path.extname(imagePath).toLowerCase();
   const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
 
-  // SerpApi Google Lens endpoint with URL-based image
-  // First, we need to get the results using the file upload approach
-  const formData = new FormData();
-  formData.append('engine', 'google_lens');
-  formData.append('api_key', apiKey);
-  
-  // Upload as base64 encoded URL
-  const dataUrl = `data:${mimeType};base64,${imageBase64}`;
-  formData.append('url', dataUrl);
+  // Step 1: Upload image to SerpApi Image API to get image_id
+  const imageForm = new FormData();
+  imageForm.append('api_key', apiKey);
+  imageForm.append('engine', 'google_lens');
+  imageForm.append('image', new Blob([imageBuffer], { type: mimeType }), path.basename(imagePath));
 
-  // Try the JSON API endpoint
-  const searchUrl = `https://serpapi.com/search.json?engine=google_lens&api_key=${encodeURIComponent(apiKey)}&url=${encodeURIComponent(dataUrl)}`;
+  const uploadResp = await fetch('https://serpapi.com/image', {
+    method: 'POST',
+    body: imageForm,
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!uploadResp.ok) {
+    const text = await uploadResp.text().catch(() => '');
+    throw new Error(`SerpApi Image API returned HTTP ${uploadResp.status}: ${text.slice(0, 200)}`);
+  }
+
+  const uploadData = await uploadResp.json() as any;
+  const imageId = uploadData.image_id;
+  
+  if (!imageId) {
+    throw new Error('SerpApi Image API did not return an image_id');
+  }
+
+  // Step 2: Use image_id to search Google Lens
+  const searchUrl = `https://serpapi.com/search.json?engine=google_lens&api_key=${encodeURIComponent(apiKey)}&image_id=${encodeURIComponent(imageId)}`;
 
   const resp = await fetch(searchUrl, {
     method: 'GET',
@@ -143,7 +156,7 @@ async function searchGoogleLens(
 
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(`SerpApi returned HTTP ${resp.status}: ${text.slice(0, 200)}`);
+    throw new Error(`SerpApi Google Lens returned HTTP ${resp.status}: ${text.slice(0, 200)}`);
   }
 
   const data = await resp.json() as any;

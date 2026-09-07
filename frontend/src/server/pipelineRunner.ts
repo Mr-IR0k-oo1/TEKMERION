@@ -357,16 +357,41 @@ async function queryReverseImageSearch(
     return [];
   }
   try {
-    const endpoint = process.env.TEKMERION_SEARCH_ENDPOINT || 'https://serpapi.com/search.json?engine=google_lens';
-    const form = new FormData();
     const fileBuffer = fs.readFileSync(imagePath);
-    form.append('file', new Blob([fileBuffer], { type: 'image/jpeg' }), path.basename(imagePath));
-    form.append('api_key', apiKey);
+    const ext = path.extname(imagePath).toLowerCase();
+    const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
 
-    const resp = await fetch(endpoint, {
+    // Step 1: Upload image to SerpApi Image API
+    const imageForm = new FormData();
+    imageForm.append('api_key', apiKey);
+    imageForm.append('engine', 'google_lens');
+    imageForm.append('image', new Blob([fileBuffer], { type: mimeType }), path.basename(imagePath));
+
+    const uploadResp = await fetch('https://serpapi.com/image', {
       method: 'POST',
-      body: form,
-      signal: AbortSignal.timeout(8000),
+      body: imageForm,
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!uploadResp.ok) {
+      console.warn(`[SearchProvider] SerpApi Image API returned HTTP ${uploadResp.status}`);
+      return [];
+    }
+
+    const uploadData = await uploadResp.json() as any;
+    const imageId = uploadData.image_id;
+
+    if (!imageId) {
+      console.warn(`[SearchProvider] SerpApi Image API did not return an image_id`);
+      return [];
+    }
+
+    // Step 2: Use image_id to search Google Lens
+    const searchUrl = `https://serpapi.com/search.json?engine=google_lens&api_key=${encodeURIComponent(apiKey)}&image_id=${encodeURIComponent(imageId)}`;
+
+    const resp = await fetch(searchUrl, {
+      method: 'GET',
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!resp.ok) {
@@ -503,134 +528,32 @@ async function queryWikimediaCommons(
 
   // 3. Stage: Candidate Discovery (Dynamic repository scanner + live reverse image search + Wikimedia Commons API)
   pushEvent('Stage: DISCOVERY querying reverse image search, open repositories & repository index');
+  // 3. Stage: Candidate Discovery (Live reverse image search + Wikimedia Commons API + Openverse)
+  pushEvent('Stage: DISCOVERY querying live open repositories & reverse-image search');
   
-  // A. Query Live Reverse Image Search if configured
-  const liveWebCandidates = await queryReverseImageSearch(inputFilePath, discDir);
-  if (liveWebCandidates.length > 0) {
-    pushEvent(`Live reverse-image discovery retrieved ${liveWebCandidates.length} web candidate assets`);
+  const discoveryResult = await discoverCandidates(inputFilePath, discDir);
+  
+  if (discoveryResult.total_discovered > 0) {
+    pushEvent(`Live discovery retrieved ${discoveryResult.total_discovered} web candidate assets from ${discoveryResult.providers_queried.join(', ')}`);
+  }
+  if (discoveryResult.errors.length > 0) {
+    pushEvent(`Discovery warnings: ${discoveryResult.errors.join(' | ')}`);
   }
 
-  // B. Query Wikimedia Commons Live API
-  const liveWikiCandidates = await queryWikimediaCommons(discDir);
-  if (liveWikiCandidates.length > 0) {
-    pushEvent(`Wikimedia Commons API retrieved ${liveWikiCandidates.length} public domain / CC candidates`);
-  }
-
-  // B2. Query Openverse Live API (openly licensed media)
-  let liveOpenverseCandidates: typeof liveWebCandidates = [];
-  try {
-    const ovResp = await fetch('https://api.openverse.org/v1/images/?q=portrait+face&license_type=all&page_size=3', {
-      headers: { 'User-Agent': 'TEKMERION/1.0 (Evidence Verification Engine)' },
-      signal: AbortSignal.timeout(6000),
-    });
-    if (ovResp.ok) {
-      const ovData = await ovResp.json() as any;
-      const ovItems = ovData.results || [];
-      const ovCandDir = path.join(discDir, 'candidates');
-      fs.mkdirSync(ovCandDir, { recursive: true });
-      for (let i = 0; i < Math.min(3, ovItems.length); i++) {
-        const item = ovItems[i];
-        const thumbUrl = item.thumbnail || item.url;
-        if (!thumbUrl) continue;
-        let candFile = '';
-        try {
-          const imgResp = await fetch(thumbUrl, { signal: AbortSignal.timeout(5000) });
-          if (imgResp.ok) {
-            const imgBuf = Buffer.from(await imgResp.arrayBuffer());
-            if (imgBuf.length > 100 && imgBuf.length < 10 * 1024 * 1024) {
-              candFile = path.join(ovCandDir, `openverse_${item.id || i}.jpg`);
-              fs.writeFileSync(candFile, imgBuf);
-            }
-          }
-        } catch {}
-        if (candFile && fs.existsSync(candFile)) {
-          let domain = 'openverse.org';
-          try { domain = new URL(item.foreign_landing_url || item.url).hostname; } catch {}
-          liveOpenverseCandidates.push({
-            id: `ov-${item.id || i}`,
-            file: candFile,
-            url: item.foreign_landing_url || `https://openverse.org/image/${item.id}`,
-            domain,
-            title: item.title || `Openverse Image #${i + 1}`,
-            snippet: (item.attribution || item.title || 'Openly licensed media from Openverse').slice(0, 200),
-            provider: 'openverse',
-            author: item.creator || 'Unknown',
-            license: item.license || 'CC',
-            record_id: item.id,
-            image_url: item.url || thumbUrl,
-            thumbnail_url: thumbUrl,
-          });
-        }
-      }
-      if (liveOpenverseCandidates.length > 0) {
-        pushEvent(`Openverse API retrieved ${liveOpenverseCandidates.length} openly licensed candidates`);
-      }
-    }
-  } catch (e: any) {
-    console.warn('[Discovery] Openverse API error:', e.message);
-  }
-
-  // C. Query Dynamic Catalog Candidates (local assets)
-  const candidatesDir = path.join(rootDir, 'assets', 'candidates');
-  const catalogCandidateDefs: Array<{
-    id: string;
-    file: string;
-    url: string;
-    domain: string;
-    title: string;
-    snippet: string;
-    provider: string;
-    author?: string;
-    license?: string;
-    record_id?: string;
-    image_url: string;
-    thumbnail_url: string;
-  }> = [];
-
-  if (fs.existsSync(candidatesDir)) {
-    const candidateFiles = fs.readdirSync(candidatesDir).filter((f) => {
-      const ext = path.extname(f).toLowerCase();
-      return ['.jpg', '.jpeg', '.png', '.webp', '.bmp'].includes(ext);
-    });
-
-    candidateFiles.sort();
-
-    for (let i = 0; i < candidateFiles.length; i++) {
-      const f = candidateFiles[i];
-      const filePath = path.join(candidatesDir, f);
-      const baseName = path.basename(f, path.extname(f));
-
-      const metaPath = path.join(candidatesDir, `${baseName}.json`);
-      let meta: any = {};
-      if (fs.existsSync(metaPath)) {
-        try {
-          meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-        } catch {}
-      }
-
-      const formattedTitle = meta.title || baseName
-        .split(/[_-]/)
-        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
-        .join(' ');
-
-      catalogCandidateDefs.push({
-        id: `cand-${String(i + 1).padStart(2, '0')}`,
-        file: filePath,
-        url: meta.url || `https://commons.wikimedia.org/wiki/File:${baseName}.jpg`,
-        domain: meta.domain || (meta.url ? new URL(meta.url).hostname : 'commons.wikimedia.org'),
-        title: formattedTitle,
-        snippet: meta.snippet || `Indexed public archive entry: ${formattedTitle}`,
-        provider: meta.provider || 'wikimedia_commons',
-        author: meta.author || 'Open Media Repository Contributor',
-        license: meta.license || 'CC BY-SA 4.0',
-        record_id: meta.record_id || `rec-${baseName}`,
-        image_url: `/candidates/${f}`,
-        thumbnail_url: `/candidates/${f}`,
-      });
-    }
-  }
-
-  const allCandidateDefs = [...liveWebCandidates, ...liveWikiCandidates, ...catalogCandidateDefs];
+  const allCandidateDefs = discoveryResult.candidates.map((c, i) => ({
+    id: c.id,
+    file: c.local_file || '',
+    url: c.url,
+    domain: c.domain,
+    title: c.title,
+    snippet: c.snippet,
+    provider: c.provider,
+    author: c.author || 'Unknown',
+    license: c.license || 'Web Indexed',
+    record_id: c.record_id || c.id,
+    image_url: `/runs/${runId}/discovery/candidates/${path.basename(c.local_file || '')}`,
+    thumbnail_url: `/runs/${runId}/discovery/candidates/${path.basename(c.local_file || '')}`,
+  })).filter(c => c.file !== '');
 
   // Deduplicate candidates by URL
   const uniqueCandidateMap = new Map<string, typeof allCandidateDefs[0]>();
