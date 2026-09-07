@@ -31,7 +31,7 @@ export interface MerkleLeafInfo {
 
 export interface PipelineRunResult {
   success: boolean;
-  gate_rejected?: 'NO_FACE' | 'MULTIPLE_FACES';
+  gate_rejected?: 'NO_FACE' | 'MULTIPLE_FACES' | 'LOW_FACE_QUALITY' | 'INPUT_ERROR';
   error?: string;
   run_id: string;
   input: {

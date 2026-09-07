@@ -14,6 +14,8 @@ import {
   StepForward,
   RotateCcw,
   AlertTriangle,
+  AlertCircle,
+  ShieldX,
   CheckCircle2,
   ExternalLink,
   ShieldCheck,
@@ -345,41 +347,84 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               <Search size={18} color="var(--cyan-bright)" />
               <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Stage 3 & 4 — Discovery & Biometric Verification</h3>
             </div>
-            {completedStages.includes('VERIFY') || isCompleted ? (
-              <span className="badge badge-emerald">VERIFIED</span>
+            {topCandidate && topCandidate.status === 'verified' && topCandidate.similarity >= 0.75 ? (
+              <span className="badge badge-emerald">
+                <CheckCircle2 size={12} /> VERIFIED MATCH
+              </span>
+            ) : topCandidate && topCandidate.status === 'below_threshold' ? (
+              <span className="badge badge-amber">
+                <AlertCircle size={12} /> BELOW THRESHOLD (NO MATCH)
+              </span>
+            ) : topCandidate && topCandidate.status === 'no_face' ? (
+              <span className="badge badge-crimson">
+                <ShieldX size={12} /> NO FACE DETECTED
+              </span>
+            ) : completedStages.includes('VERIFY') ? (
+              <span className="badge badge-secondary">SCANNED</span>
             ) : (
               <span className="badge badge-cyan">READY</span>
             )}
           </div>
 
           {topCandidate ? (
-            <div style={{ background: '#060910', padding: '16px', borderRadius: '6px', display: 'flex', gap: '16px', alignItems: 'center' }}>
-              <img
-                src={topCandidate.candidate.thumbnail_url || topCandidate.candidate.image_url}
-                alt="Candidate Match"
-                style={{ width: '70px', height: '70px', borderRadius: '6px', objectFit: 'cover' }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h4 style={{ fontSize: '15px', fontWeight: 700 }}>{topCandidate.candidate.title}</h4>
-                  <span className="badge badge-emerald">
-                    {(topCandidate.similarity * 100).toFixed(1)}% Biometric Match
+            <div style={{ background: '#060910', padding: '16px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                <img
+                  src={topCandidate.candidate.thumbnail_url || topCandidate.candidate.image_url}
+                  alt="Candidate Match"
+                  style={{ width: '70px', height: '70px', borderRadius: '6px', objectFit: 'cover' }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h4 style={{ fontSize: '15px', fontWeight: 700 }}>{topCandidate.candidate.title}</h4>
+                    {topCandidate.status === 'verified' ? (
+                      <span className="badge badge-emerald">
+                        <CheckCircle2 size={12} /> {(topCandidate.similarity * 100).toFixed(1)}% Match (Verified)
+                      </span>
+                    ) : topCandidate.status === 'below_threshold' ? (
+                      <span className="badge badge-amber">
+                        <AlertCircle size={12} /> {(topCandidate.similarity * 100).toFixed(1)}% (Below 75% Threshold)
+                      </span>
+                    ) : (
+                      <span className="badge badge-crimson">
+                        <ShieldX size={12} /> No Face Detected
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--cyan-bright)', marginTop: '2px' }}>
+                    <a
+                      href={topCandidate.candidate.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      {topCandidate.candidate.url} <ExternalLink size={12} />
+                    </a>
+                  </div>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                    {topCandidate.candidate.snippet}
+                  </p>
+                </div>
+              </div>
+
+              {topCandidate.status === 'below_threshold' && (
+                <div style={{
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid var(--amber-warn)',
+                  color: '#fbbf24',
+                  fontSize: '11px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                  <span>
+                    Biometric cosine similarity is {(topCandidate.similarity * 100).toFixed(1)}%, which is below the required 75.0% threshold. This candidate is not a confirmed match.
                   </span>
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--cyan-bright)', marginTop: '2px' }}>
-                  <a
-                    href={topCandidate.candidate.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    {topCandidate.candidate.url} <ExternalLink size={12} />
-                  </a>
-                </div>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  {topCandidate.candidate.snippet}
-                </p>
-              </div>
+              )}
             </div>
           ) : (
             <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
