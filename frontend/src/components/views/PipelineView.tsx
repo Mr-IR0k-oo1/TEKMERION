@@ -40,8 +40,7 @@ interface PipelineViewProps {
   evidenceRecord: EvidenceRecord | null;
   evidenceBundle: EvidenceBundle | null;
   blockchainRecord: BlockchainRecord | null;
-  topCandidate: VerificationResult | null;
-  candidatesCount: number;
+  candidates: VerificationResult[];
   onRunPipeline: () => void;
   onStepNext: () => void;
   onReset: () => void;
@@ -63,8 +62,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   evidenceRecord,
   evidenceBundle,
   blockchainRecord,
-  topCandidate,
-  candidatesCount,
+  candidates,
   onRunPipeline,
   onStepNext,
   onReset,
@@ -75,6 +73,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   const isCompleted = status === 'completed';
   const isTampered = status === 'tampered';
   const isRunning = status === 'running';
+  const topCandidate = candidates && candidates.length > 0 ? candidates[0] : null;
 
   const triggerCelebration = () => {
     confetti({
@@ -154,6 +153,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '4px' }}>
+              LOCAL VALIDATION TESTS
+            </div>
             <button
               className={`btn btn-secondary ${imageFileName.includes('query_face') ? 'active' : ''}`}
               style={{ justifyContent: 'flex-start', textAlign: 'left', padding: '10px 14px' }}
@@ -180,6 +182,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               </div>
             </button>
 
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginTop: '12px', marginBottom: '4px' }}>
+              LIVE DISCOVERY RUN
+            </div>
             <button
               className="btn btn-secondary"
               style={{
@@ -398,63 +403,45 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
             )}
           </div>
 
-          {topCandidate ? (
-            <div style={{ background: 'var(--color-paper)', padding: '16px', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                <img
-                  src={topCandidate.candidate.thumbnail_url || topCandidate.candidate.image_url}
-                  alt="Candidate Match"
-                  style={{ width: '70px', height: '70px', borderRadius: '6px', objectFit: 'cover' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h4 style={{ fontSize: '15px', fontWeight: 700 }}>{topCandidate.candidate.title}</h4>
-                    {topCandidate.status === 'verified' ? (
-                      <span className="badge badge-emerald">
-                        <CheckCircle2 size={12} /> {(topCandidate.similarity * 100).toFixed(1)}% Match (Verified)
-                      </span>
-                    ) : topCandidate.status === 'below_threshold' ? (
-                      <span className="badge badge-amber">
-                        <AlertCircle size={12} /> {(topCandidate.similarity * 100).toFixed(1)}% (Below 75% Threshold)
-                      </span>
-                    ) : (
-                      <span className="badge badge-crimson">
-                        <ShieldX size={12} /> No Face Detected
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--cyan-bright)', marginTop: '2px' }}>
-                    <a
-                      href={topCandidate.candidate.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ color: 'inherit', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                    >
-                      {topCandidate.candidate.url} <ExternalLink size={12} />
+          {candidates && candidates.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '30px 1fr 80px 100px', gap: '12px', padding: '0 12px 8px', fontSize: '11px', color: 'var(--text-muted)', borderBottom: '1px solid var(--color-rule-dim)' }}>
+                <div>RANK</div>
+                <div>CANDIDATE SOURCE</div>
+                <div style={{ textAlign: 'right' }}>SIMILARITY</div>
+                <div style={{ textAlign: 'right' }}>RESULT</div>
+              </div>
+              {candidates.slice(0, 4).map((c, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '30px 1fr 80px 100px', gap: '12px', alignItems: 'center', background: 'var(--color-paper)', padding: '10px 12px', borderRadius: '4px', fontSize: '13px' }}>
+                  <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>#{i + 1}</div>
+                  <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <a href={c.candidate.url} target="_blank" rel="noreferrer" style={{ color: 'var(--color-ink)', textDecoration: 'none' }}>
+                      {c.candidate.domain}/...
                     </a>
                   </div>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    {topCandidate.candidate.snippet}
-                  </p>
+                  <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                    {(c.similarity * 100).toFixed(1)}%
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {c.status === 'verified' ? (
+                      <span style={{ color: 'var(--emerald-verified)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}><CheckCircle2 size={12} /> MATCH</span>
+                    ) : (
+                      <span style={{ color: 'var(--crimson-tamper)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ShieldX size={12} /> REJECT</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-
-              {topCandidate.status === 'below_threshold' && (
-                <div style={{
-                  padding: '8px 12px',
-                  borderRadius: '4px',
-                  background: 'var(--color-amber-dim)',
-                  border: '1px solid var(--color-amber)',
-                  color: 'var(--color-amber)',
-                  fontSize: '11px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
-                  <AlertCircle size={14} style={{ flexShrink: 0 }} />
-                  <span>
-                    Biometric cosine similarity is {(topCandidate.similarity * 100).toFixed(1)}%, which is below the required 75.0% threshold. This candidate is not a confirmed match.
-                  </span>
+              ))}
+              
+              {candidates[0]?.status === 'verified' && (
+                <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--color-rule-dim)' }}>
+                   <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                     <img src={candidates[0].candidate.thumbnail_url || candidates[0].candidate.image_url} alt="Top Match" style={{ width: '60px', height: '60px', borderRadius: '4px', objectFit: 'cover' }} />
+                     <div>
+                       <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Best verified candidate</div>
+                       <div style={{ fontSize: '14px', fontWeight: 600 }}>{candidates[0].candidate.title.slice(0, 40)}</div>
+                       <div style={{ fontSize: '12px', color: 'var(--emerald-verified)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}><CheckCircle2 size={12} /> VERIFIED</div>
+                     </div>
+                   </div>
                 </div>
               )}
             </div>
@@ -481,40 +468,86 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '13px' }}>
-            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Local Merkle Root (RFC 8785):</span>
-              <div
-                className="mono"
-                style={{
-                  color: isTampered
-                    ? 'var(--crimson-tamper)'
-                    : evidenceBundle?.root_hash
-                    ? 'var(--emerald-verified)'
-                    : 'var(--text-muted)',
-                  fontSize: '12px',
-                  wordBreak: 'break-all',
-                  marginTop: '4px',
-                }}
-              >
-                {evidenceBundle?.root_hash || (status === 'no_match' ? '-- (Halted: Similarity < 75%)' : '--')}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px', fontSize: '13px' }}>
+            {evidenceBundle?.tree?.leaves && (
+              <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
+                <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Merkle Tree Leaves:</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '4px', fontSize: '11px' }} className="mono">
+                  <div style={{ color: 'var(--text-muted)' }}>[0] Image Hash:</div>
+                  <div style={{ color: 'var(--color-ink)', wordBreak: 'break-all' }}>{evidenceBundle.tree.leaves.image_hash}</div>
+                  
+                  <div style={{ color: 'var(--text-muted)' }}>[1] Content Hash:</div>
+                  <div style={{ color: 'var(--color-ink)', wordBreak: 'break-all' }}>{evidenceBundle.tree.leaves.content_hash}</div>
+                  
+                  <div style={{ color: 'var(--text-muted)' }}>[2] Meta Hash:</div>
+                  <div style={{ color: 'var(--color-ink)', wordBreak: 'break-all' }}>{evidenceBundle.tree.leaves.metadata_hash}</div>
+                  
+                  <div style={{ color: 'var(--text-muted)' }}>[3] Face Hash:</div>
+                  <div style={{ color: 'var(--color-ink)', wordBreak: 'break-all' }}>{evidenceBundle.tree.leaves.face_hash}</div>
+                  
+                  <div style={{ color: 'var(--text-muted)' }}>[4] Prov Hash:</div>
+                  <div style={{ color: 'var(--color-ink)', wordBreak: 'break-all' }}>{evidenceBundle.tree.leaves.provenance_hash}</div>
+                </div>
+              </div>
+            )}
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Local Evidence Root (RFC 8785):</span>
+                <div
+                  className="mono"
+                  style={{
+                    color: isTampered
+                      ? 'var(--crimson-tamper)'
+                      : evidenceBundle?.root_hash
+                      ? 'var(--emerald-verified)'
+                      : 'var(--text-muted)',
+                    fontSize: '12px',
+                    wordBreak: 'break-all',
+                    marginTop: '4px',
+                  }}
+                >
+                  {evidenceBundle?.root_hash || (status === 'no_match' ? '-- (Halted: Similarity < 75%)' : '--')}
+                </div>
+              </div>
+  
+              <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
+                <span style={{ color: 'var(--text-muted)' }}>Sepolia Anchored Root:</span>
+                <div
+                  className="mono"
+                  style={{
+                    color: blockchainRecord?.registered_root ? 'var(--violet-chain)' : 'var(--text-muted)',
+                    fontSize: '12px',
+                    wordBreak: 'break-all',
+                    marginTop: '4px',
+                  }}
+                >
+                  {blockchainRecord?.registered_root || (status === 'no_match' ? '-- (Registration halted)' : '--')}
+                </div>
               </div>
             </div>
-
-            <div style={{ background: 'var(--color-paper)', padding: '12px', borderRadius: '6px' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Sepolia Anchored Root:</span>
-              <div
-                className="mono"
-                style={{
-                  color: blockchainRecord?.registered_root ? 'var(--violet-chain)' : 'var(--text-muted)',
-                  fontSize: '12px',
-                  wordBreak: 'break-all',
-                  marginTop: '4px',
-                }}
-              >
-                {blockchainRecord?.registered_root || (status === 'no_match' ? '-- (Registration halted)' : '--')}
+            
+            {blockchainRecord?.registered_root && evidenceBundle?.root_hash && (
+              <div style={{
+                padding: '10px 14px',
+                borderRadius: '4px',
+                background: isTampered ? 'var(--color-crimson-dim)' : 'var(--color-emerald-dim)',
+                border: isTampered ? '1px solid var(--color-crimson)' : '1px solid var(--color-emerald)',
+                color: isTampered ? 'var(--crimson-tamper)' : 'var(--emerald-verified)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontWeight: 600
+              }}>
+                {isTampered ? <ShieldX size={15} style={{ flexShrink: 0 }} /> : <CheckCircle2 size={15} style={{ flexShrink: 0 }} />}
+                <span>
+                  {isTampered 
+                    ? 'INTEGRITY FAILURE: Local Merkle root does not match the Ethereum Sepolia anchor. Evidence has been tampered with!' 
+                    : 'VERIFIED: Local Merkle root cryptographically matches the immutable on-chain Sepolia anchor.'}
+                </span>
               </div>
-            </div>
+            )}
           </div>
 
           {status === 'no_match' && (

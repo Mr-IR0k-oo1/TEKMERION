@@ -1,16 +1,15 @@
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
-use sha2::{Digest, Sha256};
 use tekmerion_audit::RunBundleManager;
 use tekmerion_blockchain::{BlockchainClient, BlockchainConfig};
 use tekmerion_core::{PipelineState, SearchCandidate, VerificationResult, VerificationStatus};
 use tekmerion_evidence::{EvidenceBundle, EvidenceRecord, CURRENT_SCHEMA_VERSION};
 use tekmerion_face::{
     BlurEstimate, BlurLevel, ExposureEstimate, ExposureLevel, FaceQualityAssessment, FaceWorker,
-    FaceWorkerConfig, OcclusionIndicators, PoseEstimate, QualityStatus,
+    OcclusionIndicators, PoseEstimate, QualityStatus,
 };
-use tekmerion_verification::{cosine_similarity, CandidateRanker, RankedCandidate};
+use tekmerion_verification::{CandidateRanker, RankedCandidate};
 use url::Url;
 
 use crate::input::{AppAction, Direction};
@@ -189,6 +188,7 @@ pub struct App {
     pub demo_mode: bool,
     pub input_image_path: Option<String>,
     pub query_embedding: Option<Vec<f32>>,
+    pub discovered_candidates: Vec<SearchCandidate>,
 }
 
 impl Default for App {
@@ -237,6 +237,7 @@ impl App {
             demo_mode: true,
             input_image_path: None,
             query_embedding: None,
+            discovered_candidates: Vec::new(),
         }
     }
 
@@ -486,9 +487,14 @@ impl App {
             }
         };
 
+        let runtime_cfg = tekmerion_config::ConfigLoader::load().unwrap_or_default();
+        let face_config = tekmerion_face::FaceWorkerConfig {
+            script: runtime_cfg.face_worker_path,
+            ..Default::default()
+        };
         let worker_res = {
             let _guard = rt.enter();
-            FaceWorker::spawn(&FaceWorkerConfig::default())
+            FaceWorker::spawn(&face_config)
         };
         let worker = match worker_res {
             Ok(w) => w,
@@ -569,12 +575,87 @@ impl App {
             return;
         }
 
-        self.discovery_provider = "catalog_discovery".to_string();
+        self.discovery_provider = "external_reverse_image".to_string();
         self.discovery_request_status = "SENT".to_string();
-        self.discovery_raw_count = 3;
-        self.discovery_unique_count = 3;
-        self.candidate_count = 3;
-        self.push_event("Discovery complete: 3 candidates retrieved and normalized");
+
+        let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+            Ok(r) => r,
+            Err(e) => {
+                self.push_event(&format!("Runtime init error: {e}"));
+                self.set_discovery_error(self.discovery_provider.clone(), e.to_string());
+                return;
+            }
+        };
+
+        let runtime_cfg = tekmerion_config::ConfigLoader::load().unwrap_or_default();
+        let ext_config = tekmerion_discovery::external::ExternalReverseImageConfig::new(
+            runtime_cfg.search_api_key.unwrap_or_default(),
+            runtime_cfg.search_endpoint,
+            tekmerion_discovery::external::DEFAULT_PROVIDER_NAME,
+            std::time::Duration::from_secs(runtime_cfg.http_timeout_seconds),
+            tekmerion_discovery::external::DEFAULT_IMAGE_FIELD,
+        );
+        let config = match Ok::<_, tekmerion_discovery::error::DiscoveryError>(ext_config) {
+            Ok(c) => c,
+            Err(e) => {
+                self.push_event(&format!("Config error: {e}"));
+                self.set_discovery_error(self.discovery_provider.clone(), e.to_string());
+                return;
+            }
+        };
+
+        let provider = match tekmerion_discovery::external::ExternalReverseImageProvider::new(config) {
+            Ok(p) => std::sync::Arc::new(p) as std::sync::Arc<dyn tekmerion_discovery::provider::DiscoveryProvider>,
+            Err(e) => {
+                self.push_event(&format!("Provider error: {e}"));
+                self.set_discovery_error(self.discovery_provider.clone(), e.to_string());
+                return;
+            }
+        };
+
+        let engine = match tekmerion_discovery::engine::DiscoveryEngine::new(
+            vec![provider],
+            std::sync::Arc::new(tekmerion_discovery::cache::NoopCache),
+            tekmerion_discovery::engine::DiscoveryEngineConfig {
+                max_candidates: runtime_cfg.max_candidates,
+                ..Default::default()
+            },
+        ) {
+            Ok(e) => e,
+            Err(e) => {
+                self.push_event(&format!("Engine init error: {e}"));
+                self.set_discovery_error(self.discovery_provider.clone(), e.to_string());
+                return;
+            }
+        };
+
+        // Reconstruct FaceAnalysis from stored data
+        let embedding = match &self.query_embedding {
+            Some(v) => vec![tekmerion_core::FaceEmbedding { vector: v.clone(), normalized: true }],
+            None => vec![],
+        };
+        let analysis = tekmerion_core::FaceAnalysis {
+            detections: vec![],
+            embeddings: embedding,
+            timestamp: chrono::Utc::now(),
+            image_path: self.input_image_path.clone(),
+        };
+
+        match rt.block_on(engine.discover(&analysis)) {
+            Ok(candidates) => {
+                let len = candidates.len();
+                self.discovery_raw_count = len;
+                self.discovery_unique_count = len;
+                self.candidate_count = len;
+                self.discovered_candidates = candidates;
+                self.discovery_request_status = "SUCCESS".to_string();
+                self.push_event(&format!("Discovery complete: {} candidates retrieved and normalized", len));
+            }
+            Err(e) => {
+                self.push_event(&format!("Discovery error: {e}"));
+                self.set_discovery_error(self.discovery_provider.clone(), e.to_string());
+            }
+        }
     }
 
     pub fn execute_verify_stage(&mut self) {
@@ -593,98 +674,66 @@ impl App {
             None => vec![0.1; 512],
         };
 
-        let candidate_files = [
-            (
-                "assets/candidates/match_target.jpg",
-                "https://commons.wikimedia.org/wiki/File:Portrait_Study_Subject_01.jpg",
-                "commons.wikimedia.org",
-                "Wikimedia Commons — Public Portrait Archive Entry",
-                "High-resolution studio portrait cataloged in Wikimedia Commons repository",
-            ),
-            (
-                "assets/candidates/different_person.jpg",
-                "https://www.loc.gov/item/2021670142/",
-                "loc.gov",
-                "Library of Congress — Historical Photographic Collection",
-                "Prints & Photographs Division, Library of Congress Washington D.C.",
-            ),
-            (
-                "assets/candidates/scenic_landscape.png",
-                "https://openverse.org/image/7b8c2d1e-9a4f-4d3b-a2c1-8e9f0a1b2c3d",
-                "openverse.org",
-                "Openverse — Landscape Environmental Study",
-                "Environmental non-face benchmark asset indexed from Openverse public repository",
-            ),
-        ];
+        if self.discovered_candidates.is_empty() {
+            self.push_event("No candidates to verify");
+            return;
+        }
 
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().ok();
-        let worker = rt.as_ref().and_then(|r| {
-            let _guard = r.enter();
-            FaceWorker::spawn(&FaceWorkerConfig::default()).ok()
-        });
-
-        let mut results = Vec::new();
-
-        for (file_path, url_str, domain, title, snippet) in candidate_files {
-            let p = Path::new(file_path);
-            let cand_hash = if let Ok(bytes) = std::fs::read(p) {
-                let mut hasher = Sha256::new();
-                hasher.update(&bytes);
-                Some(hex::encode(hasher.finalize()))
-            } else {
-                None
-            };
-
-            let mut sim = 0.0;
-            let mut quality = 0.0;
-            let mut status = VerificationStatus::NoFace;
-            let mut matched_face_idx = None;
-
-            if let (Some(rt), Some(worker)) = (&rt, &worker) {
-                if let Ok(analysis) = rt.block_on(worker.analyze(file_path)) {
-                    if !analysis.detections.is_empty() && !analysis.embeddings.is_empty() {
-                        let cand_emb = &analysis.embeddings[0].vector;
-                        if let Ok(s) = cosine_similarity(&query_emb, cand_emb) {
-                            sim = (s * 1000.0).round() / 1000.0;
-                            quality = (analysis.detections[0].quality * 100.0).round() / 100.0;
-                            matched_face_idx = Some(0);
-                            status = if sim >= 0.75 {
-                                VerificationStatus::Verified
-                            } else {
-                                VerificationStatus::BelowThreshold
-                            };
-                        }
-                    }
-                }
+        let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+            Ok(r) => r,
+            Err(e) => {
+                self.push_event(&format!("Runtime init error: {e}"));
+                return;
             }
+        };
 
-            results.push(VerificationResult {
-                candidate: SearchCandidate {
-                    url: Url::parse(url_str).unwrap(),
-                    title: Some(title.to_string()),
-                    domain: domain.to_string(),
-                    image_url: Some(Url::parse(url_str).unwrap()),
-                    thumbnail_url: None,
-                    snippet: Some(snippet.to_string()),
-                    provider: "catalog_discovery".to_string(),
-                    discovered_at: chrono::Utc::now(),
-                },
-                similarity: sim,
-                quality,
-                matched_face_index: matched_face_idx,
-                candidate_image_hash: cand_hash,
-                status,
-                error_message: None,
-            });
+        // Create FaceWorker
+        let runtime_cfg = tekmerion_config::ConfigLoader::load().unwrap_or_default();
+        let face_config = tekmerion_face::FaceWorkerConfig {
+            script: runtime_cfg.face_worker_path,
+            ..Default::default()
+        };
+        let worker = match FaceWorker::spawn(&face_config) {
+            Ok(w) => std::sync::Arc::new(w) as std::sync::Arc<dyn tekmerion_verification::verifier::FaceAnalysisClient>,
+            Err(e) => {
+                self.push_event(&format!("FaceWorker init error: {e}"));
+                return;
+            }
+        };
+
+        let downloader = match tekmerion_verification::ImageDownloader::with_config(
+            tekmerion_verification::DownloaderConfig {
+                max_download_bytes: runtime_cfg.max_download_bytes,
+                timeout: std::time::Duration::from_secs(runtime_cfg.http_timeout_seconds),
+                ..Default::default()
+            }
+        ) {
+            Ok(d) => std::sync::Arc::new(d) as std::sync::Arc<dyn tekmerion_verification::verifier::CandidateImageDownloader>,
+            Err(e) => {
+                self.push_event(&format!("Downloader init error: {e}"));
+                return;
+            }
+        };
+
+        let verifier = match tekmerion_verification::verifier::CandidateFaceVerifier::new(query_emb, downloader, worker) {
+            Ok(v) => v,
+            Err(e) => {
+                self.push_event(&format!("Verifier init error: {:?}", e));
+                return;
+            }
+        };
+
+        use tekmerion_core::pipeline::CandidateVerifier;
+        match rt.block_on(verifier.verify(self.discovered_candidates.clone())) {
+            Ok(results) => {
+                self.set_verified_candidates(results);
+                let top_sim = self.ranked_candidates.first().map(|r| r.verification.similarity).unwrap_or(0.0);
+                self.push_event(&format!("Candidate verification complete: top similarity {top_sim:.3}"));
+            }
+            Err(e) => {
+                self.push_event(&format!("Verification failed: {}", e));
+            }
         }
-
-        if let (Some(rt), Some(worker)) = (rt, worker) {
-            let _ = rt.block_on(worker.shutdown());
-        }
-
-        self.set_verified_candidates(results);
-        let top_sim = self.ranked_candidates.first().map(|r| r.verification.similarity).unwrap_or(0.0);
-        self.push_event(&format!("Candidate verification complete: top similarity {top_sim:.3}"));
     }
 
     pub fn execute_evidence_stage(&mut self) {
@@ -747,31 +796,51 @@ impl App {
             return;
         }
 
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().ok();
-        let rpc_url = Url::parse("https://ethereum-sepolia.publicnode.com").unwrap();
-        let config = BlockchainConfig::sepolia(rpc_url, &self.blockchain_contract);
-        let block_num = if let (Some(rt), Ok(client)) = (rt, BlockchainClient::new(config)) {
-            rt.block_on(client.get_block_number()).unwrap_or(11651797)
-        } else {
-            11651797
+        let bundle = match &self.evidence_bundle {
+            Some(b) => b.clone(),
+            None => {
+                self.push_event("No evidence bundle to anchor");
+                return;
+            }
         };
 
-        self.blockchain_block = block_num;
-        self.blockchain_confirmations = 12;
-        if self.chain_root == "--" && self.evidence_root != "--" {
-            self.chain_root = self.evidence_root.clone();
-        }
+        let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+            Ok(r) => r,
+            Err(e) => {
+                self.push_event(&format!("Runtime init error: {e}"));
+                return;
+            }
+        };
 
-        let mut hasher = Sha256::new();
-        hasher.update(self.evidence_root.as_bytes());
-        hasher.update(self.input_image_hash.as_bytes());
-        hasher.update(block_num.to_be_bytes());
-        self.tx_hash = format!("0x{}", hex::encode(hasher.finalize()));
-        self.push_event(&format!(
-            "Anchored to Sepolia block #{}: {}",
-            block_num,
-            &self.tx_hash[..18.min(self.tx_hash.len())]
-        ));
+        let runtime_cfg = tekmerion_config::ConfigLoader::load().unwrap_or_default();
+        let config = BlockchainConfig::sepolia(runtime_cfg.eth_rpc_url, &runtime_cfg.contract_address);
+        let client = match BlockchainClient::new(config) {
+            Ok(c) => c,
+            Err(e) => {
+                self.push_event(&format!("Blockchain client error: {e}"));
+                return;
+            }
+        };
+
+        use tekmerion_core::pipeline::EvidenceRegistry;
+        match rt.block_on(client.register(bundle.into())) {
+            Ok(record) => {
+                self.tx_hash = record.tx_hash.clone();
+                self.blockchain_block = record.block_number;
+                self.blockchain_confirmations = 12;
+                if self.chain_root == "--" {
+                    self.chain_root = self.evidence_root.clone();
+                }
+                self.push_event(&format!(
+                    "Anchored to Sepolia block #{}: {}",
+                    record.block_number,
+                    &record.tx_hash[..18.min(record.tx_hash.len())]
+                ));
+            }
+            Err(e) => {
+                self.push_event(&format!("Blockchain anchoring failed: {}", e));
+            }
+        }
     }
 
     pub fn execute_final_verify_stage(&mut self) {

@@ -66,11 +66,14 @@ export function loadBlockchainConfig(): BlockchainConfig {
     || process.env.PRIVATE_KEY
     || null;
 
+  const network = process.env.BLOCKCHAIN_NETWORK || 'local';
+  const networkName = network === 'local' ? 'LOCAL ANVIL' : 'Ethereum Sepolia';
+
   return {
     rpcUrl,
     contractAddress,
     privateKey,
-    networkName: 'Ethereum Sepolia',
+    networkName,
   };
 }
 
@@ -112,17 +115,22 @@ export async function registerEvidence(
   const timestamp = new Date().toISOString();
 
   if (!config.privateKey) {
-    console.warn('[Blockchain] No private key configured — using simulated anchoring');
-    return simulatedRegister(rootHash, imageHash, config, timestamp);
+    throw new Error('No private key configured in .env. Cannot register evidence on-chain.');
   }
 
   if (!config.contractAddress) {
-    console.warn('[Blockchain] No contract address configured — using simulated anchoring');
-    return simulatedRegister(rootHash, imageHash, config, timestamp);
+    throw new Error('No contract address configured in .env. Cannot register evidence on-chain.');
   }
 
   try {
     const provider = new ethers.JsonRpcProvider(config.rpcUrl);
+    const network = await provider.getNetwork();
+    
+    const expectedChainId = process.env.BLOCKCHAIN_NETWORK === "local" ? 31337n : 11155111n;
+    if (network.chainId !== expectedChainId) {
+        throw new Error(`Connected to wrong network. Expected ${expectedChainId}, got ${network.chainId}`);
+    }
+
     const wallet = new ethers.Wallet(config.privateKey, provider);
     const contract = new ethers.Contract(config.contractAddress, EVIDENCE_REGISTRY_ABI, wallet);
 
@@ -152,7 +160,9 @@ export async function registerEvidence(
       contract: config.contractAddress,
       timestamp,
       gasUsed: receipt.gasUsed.toString(),
-      explorerUrl: `https://sepolia.etherscan.io/tx/${tx.hash}`,
+      explorerUrl: config.networkName === 'LOCAL ANVIL' 
+        ? `http://127.0.0.1:8545/tx/${tx.hash}` 
+        : `https://sepolia.etherscan.io/tx/${tx.hash}`,
     };
   } catch (err: any) {
     console.error('[Blockchain] Transaction failed:', err.message);
@@ -173,11 +183,7 @@ export async function registerEvidence(
       };
     }
 
-    // Fallback to simulated if real tx fails
-    console.warn('[Blockchain] Falling back to simulated anchoring');
-    const result = await simulatedRegister(rootHash, imageHash, config, timestamp);
-    result.error = `Live transaction failed: ${err.message?.slice(0, 100)}. Using simulated anchor.`;
-    return result;
+    throw new Error(`Live transaction failed: ${err.message?.slice(0, 100)}`);
   }
 }
 

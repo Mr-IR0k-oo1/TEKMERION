@@ -911,8 +911,7 @@ export const App: React.FC = () => {
               evidenceRecord={evidenceRecord}
               evidenceBundle={evidenceBundle}
               blockchainRecord={blockchainRecord}
-              topCandidate={candidates[0] || null}
-              candidatesCount={candidates.length}
+              candidates={candidates}
               onRunPipeline={handleRunPipeline}
               onStepNext={handleStepNext}
               onReset={handleReset}

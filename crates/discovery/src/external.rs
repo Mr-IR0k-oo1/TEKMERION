@@ -240,27 +240,83 @@ impl DiscoveryProvider for ExternalReverseImageProvider {
             "Dispatching reverse-image discovery request with input image"
         );
 
-        let response = self
-            .client
-            .post(self.config.endpoint.clone())
-            .header("Authorization", format!("Bearer {}", self.config.api_key))
-            .header("X-API-Key", &self.config.api_key)
-            .multipart(form)
-            .send()
-            .await
-            .map_err(|e| {
-                if e.is_timeout() {
-                    DiscoveryError::Timeout {
-                        provider: self.id().to_string(),
-                        timeout_ms: self.config.timeout.as_millis() as u64,
+        let response = if self.config.endpoint.host_str() == Some("serpapi.com") {
+            tracing::info!(
+                provider = self.id(),
+                "Using SerpApi Image API for two-step image upload"
+            );
+            let image_api_url = "https://serpapi.com/image";
+            let image_upload_res = self.client.post(image_api_url)
+                .query(&[("api_key", &self.config.api_key)])
+                .multipart(form)
+                .send()
+                .await
+                .map_err(|e| {
+                    if e.is_timeout() {
+                        DiscoveryError::Timeout {
+                            provider: self.id().to_string(),
+                            timeout_ms: self.config.timeout.as_millis() as u64,
+                        }
+                    } else {
+                        DiscoveryError::Provider {
+                            provider: self.id().to_string(),
+                            message: redact_secrets(&e.to_string(), &self.config.api_key),
+                        }
                     }
-                } else {
-                    DiscoveryError::Provider {
-                        provider: self.id().to_string(),
-                        message: redact_secrets(&e.to_string(), &self.config.api_key),
-                    }
-                }
+                })?;
+
+            if !image_upload_res.status().is_success() {
+                let status = image_upload_res.status();
+                let error_text = image_upload_res.text().await.unwrap_or_default();
+                let sanitized = redact_secrets(&error_text, &self.config.api_key);
+                return Err(DiscoveryError::Provider {
+                    provider: self.id().to_string(),
+                    message: format!("SerpApi Image Upload failed HTTP {}: {}", status, sanitized)
+                });
+            }
+
+            let image_body: Value = image_upload_res.json().await.map_err(|e| DiscoveryError::Provider {
+                provider: self.id().to_string(),
+                message: format!("Failed to parse SerpApi Image API response: {}", redact_secrets(&e.to_string(), &self.config.api_key)),
             })?;
+
+            let image_id = image_body.get("image_id").and_then(|v| v.as_str()).ok_or_else(|| {
+                DiscoveryError::Provider {
+                    provider: self.id().to_string(),
+                    message: "SerpApi Image API response missing 'image_id'".to_string(),
+                }
+            })?.to_string();
+
+            self.client.get(self.config.endpoint.clone())
+                .query(&[
+                    ("api_key", self.config.api_key.as_str()),
+                    ("image_id", &image_id)
+                ])
+                .send()
+                .await
+        } else {
+            self.client
+                .post(self.config.endpoint.clone())
+                .header("Authorization", format!("Bearer {}", self.config.api_key))
+                .header("X-API-Key", &self.config.api_key)
+                .multipart(form)
+                .send()
+                .await
+        };
+
+        let response = response.map_err(|e| {
+            if e.is_timeout() {
+                DiscoveryError::Timeout {
+                    provider: self.id().to_string(),
+                    timeout_ms: self.config.timeout.as_millis() as u64,
+                }
+            } else {
+                DiscoveryError::Provider {
+                    provider: self.id().to_string(),
+                    message: redact_secrets(&e.to_string(), &self.config.api_key),
+                }
+            }
+        })?;
 
         let status = response.status();
 

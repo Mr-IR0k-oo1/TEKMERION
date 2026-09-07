@@ -1,5 +1,16 @@
 services:
   # ============================================================================
+  # TEKMERION Local Blockchain (Anvil)
+  # ============================================================================
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: tekmerion-anvil
+    entrypoint: ["anvil", "--host", "0.0.0.0", "--chain-id", "31337"]
+    ports:
+      - "8545:8545"
+    restart: unless-stopped
+
+  # ============================================================================
   # TEKMERION Backend API, Python Face Worker, and Evidence Pipeline Engine
   # ============================================================================
   backend:
@@ -11,16 +22,17 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
+    env_file:
+      - .env
     environment:
       - PORT=3001
-      - ETH_RPC_URL=${ETH_RPC_URL:-https://rpc.sepolia.org}
-      - EVIDENCE_CONTRACT_ADDRESS=${EVIDENCE_CONTRACT_ADDRESS:-0x712a7f0e014A895FdBdf0F46aA3199859fC8A79E}
-      - ETH_PRIVATE_KEY=${ETH_PRIVATE_KEY:-}
-      - TEKMERION_SEARCH_API_KEY=${TEKMERION_SEARCH_API_KEY:-}
       - FACE_WORKER_PATH=/app/workers/face/worker.py
+    depends_on:
+      - anvil
     volumes:
       - tekmerion_runs:/app/runs
       - ./assets:/app/assets:ro
+      - ./TEKMERION_TEST_DATA:/app/TEKMERION_TEST_DATA:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
       interval: 10s
@@ -59,15 +71,14 @@ services:
       - cli
     stdin_open: true
     tty: true
+    env_file:
+      - .env
     environment:
-      - ETH_RPC_URL=${ETH_RPC_URL:-https://rpc.sepolia.org}
-      - EVIDENCE_CONTRACT_ADDRESS=${EVIDENCE_CONTRACT_ADDRESS:-0x712a7f0e014A895FdBdf0F46aA3199859fC8A79E}
-      - ETH_PRIVATE_KEY=${ETH_PRIVATE_KEY:-}
-      - TEKMERION_SEARCH_API_KEY=${TEKMERION_SEARCH_API_KEY:-}
       - FACE_WORKER_PATH=/app/workers/face/worker.py
     volumes:
       - tekmerion_runs:/app/runs
       - ./assets:/app/assets:ro
+      - ./TEKMERION_TEST_DATA:/app/TEKMERION_TEST_DATA:ro
     entrypoint: ["/usr/local/bin/tekmerion"]
 
 volumes:
