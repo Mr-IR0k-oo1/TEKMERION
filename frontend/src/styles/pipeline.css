@@ -1,439 +1,155 @@
-/* Pipeline Stage Tracker & Main Studio Styles */
+/* App Navigation — Apple-inspired top bar */
 
-/* ─── Terminal Nav Header ─── */
-.nav-term-header {
+/* ─── App Nav (Editorial top bar) ─── */
+.app-nav {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
-}
-
-/* Telemetry strip — compact monospace row */
-.telemetry-strip {
-  height: 36px;
-  background: var(--color-paper-2);
-  border-bottom: var(--rule-hair) solid var(--color-rule);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-4);
   padding: 0 var(--page-gutter);
-  font-size: var(--text-xs);
-  gap: var(--space-md);
+  height: 64px;
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
 }
 
-.telemetry-strip__left {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.telemetry-strip__left::-webkit-scrollbar { display: none; }
-
-.brand-mark {
+.app-nav-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
-  color: var(--color-accent);
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
-.brand-name {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--text-sm);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--color-ink);
+.app-nav-name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+  white-space: nowrap;
 }
 
-.telemetry-sep {
+.app-nav-alert-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: var(--space-1);
+  border-radius: 50%;
+  background: var(--color-error);
+  flex-shrink: 0;
+}
+
+.app-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-left: var(--space-2);
+}
+
+.app-nav-tabs::-webkit-scrollbar { display: none; }
+
+.app-nav-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color var(--duration-fast) var(--ease-default),
+              background-color var(--duration-fast) var(--ease-default);
+}
+
+.app-nav-tab:hover {
+  color: var(--color-text);
+}
+
+.app-nav-tab:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.app-nav-tab.is-active {
+  color: var(--color-text);
+  background: var(--color-surface-secondary);
+}
+
+.app-nav-tab.is-alert {
+  color: var(--color-error);
+  background: var(--color-error-dim);
+}
+
+.app-nav-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.app-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.app-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.app-status-dot.is-online { background: var(--color-success); }
+.app-status-dot.is-local { background: var(--color-text-tertiary); }
+
+.app-status-sep {
   width: 1px;
   height: 14px;
-  background: var(--color-rule);
-  flex-shrink: 0;
+  background: var(--color-border);
 }
 
-.telemetry-chip {
+.app-run-id {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2xs);
-  color: var(--color-ink-3);
-  flex-shrink: 0;
-}
-
-.telemetry-chip__label {
-  color: var(--color-ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.run-id-btn {
+  gap: var(--space-1);
   background: none;
   border: none;
-  color: var(--color-ink-2);
-  font-family: var(--font-mono);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-secondary);
   font-size: var(--text-xs);
   cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  padding: 2px var(--space-xs);
-  border-radius: var(--radius-sm);
-  transition: background-color var(--dur-micro) var(--ease-out),
-              color var(--dur-micro) var(--ease-out);
+  white-space: nowrap;
+  transition: background-color var(--duration-fast) var(--ease-default),
+              color var(--duration-fast) var(--ease-default);
 }
 
-@media (hover: hover) {
-  .run-id-btn:hover {
-    background: var(--color-paper-3);
-    color: var(--color-ink);
-  }
+.app-run-id:hover {
+  background: var(--color-surface-secondary);
+  color: var(--color-text);
 }
 
-.run-id-btn:focus-visible {
-  outline: 2px solid var(--color-focus);
+.app-run-id:focus-visible {
+  outline: 2px solid var(--color-border-focus);
   outline-offset: 1px;
 }
 
-.tamper-alert-strip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-2xs) var(--space-sm);
-  background: var(--color-crimson-dim);
-  color: var(--color-crimson);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  animation: flashRed 1.8s infinite;
-  flex-shrink: 0;
-}
-
-/* ─── Terminal Command Nav (N8) ─── */
-.nav-term {
-  background: var(--color-paper);
-  border-bottom: var(--rule-hair) solid var(--color-rule);
-  padding: var(--space-xs) var(--page-gutter);
-}
-
-.nav-term__line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding: var(--space-2xs) 0;
-}
-
-.nav-term__line::-webkit-scrollbar { display: none; }
-
-.nav-term__prompt {
-  color: var(--color-accent);
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.nav-term__prog {
-  color: var(--color-ink);
-  font-weight: 600;
-  flex-shrink: 0;
-  margin-right: var(--space-xs);
-}
-
-.nav-term__flag {
-  background: none;
-  border: none;
-  color: var(--color-ink-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  padding: var(--space-2xs) var(--space-xs);
-  border-radius: var(--radius-sm);
-  transition: color var(--dur-micro) var(--ease-out),
-              background-color var(--dur-micro) var(--ease-out);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-@media (hover: hover) {
-  .nav-term__flag:hover {
-    color: var(--color-ink);
-    background: var(--color-paper-3);
-  }
-}
-
-.nav-term__flag:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 1px;
-}
-
-.nav-term__flag.is-active {
-  color: var(--color-accent);
-  background: var(--color-accent-dim);
-}
-
-.nav-term__flag.is-alert {
-  color: var(--color-crimson);
-  background: var(--color-crimson-dim);
-}
-
-.nav-term__caret {
-  display: inline-block;
-  width: 1ch;
-  color: var(--color-accent);
-  animation: blink 1.05s steps(2) infinite;
-  flex-shrink: 0;
-}
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .nav-term__caret { animation: none; opacity: 1; }
-}
-
-/* ─── 7-Stage Golden Path Tracker ─── */
-.stage-tracker-card {
-  margin: var(--space-lg) auto 0;
-  max-width: var(--max-width);
-  padding: var(--space-md) var(--space-lg);
-  background: var(--color-paper-glass);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-md);
-}
-
-.stage-tracker-steps {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: var(--space-sm);
-  position: relative;
-}
-
-.stage-step {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-sm);
-  background: oklch(16% 0.014 195 / 0.40);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  transition: border-color var(--dur-short) var(--ease-out),
-              background-color var(--dur-short) var(--ease-out),
-              box-shadow var(--dur-short) var(--ease-out);
-  position: relative;
-  overflow: hidden;
-}
-
-.stage-step.active {
-  border-color: var(--color-accent);
-  background: var(--color-accent-dim);
-}
-
-.stage-step.completed {
-  border-color: oklch(72% 0.17 160 / 0.35);
-  background: var(--color-emerald-dim);
-}
-
-.stage-step.tampered {
-  border-color: var(--color-crimson);
-  background: var(--color-crimson-dim);
-}
-
-.stage-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-2xs);
-}
-
-.stage-number {
-  font-size: var(--text-xs);
-  font-family: var(--font-mono);
-  color: var(--color-ink-3);
-}
-
-.stage-title {
-  font-family: var(--font-display);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--color-ink);
-  margin-bottom: var(--space-3xs);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.stage-desc {
-  font-size: var(--text-xs);
-  color: var(--color-ink-3);
-  line-height: 1.35;
-}
-
-/* ─── Main Pipeline Dashboard Grid ─── */
-.pipeline-layout {
-  display: grid;
-  grid-template-columns: 420px 1fr;
-  gap: var(--space-lg);
-  margin-top: var(--space-lg);
-}
-
-@media (max-width: 75rem) {
-  .pipeline-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ─── Face HUD Scanner Panel ─── */
-.face-hud-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-}
-
-.hud-viewport {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  background: oklch(8% 0.010 195);
-  border: 1px solid var(--color-rule-glow);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hud-viewport img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* Laser Scan Line */
-.hud-laser {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--color-accent), transparent);
-  box-shadow: 0 0 12px var(--color-accent);
-  animation: laserScan 2.4s ease-in-out infinite;
-  pointer-events: none;
-  z-index: 10;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .hud-laser { animation: none; display: none; }
-}
-
-/* Face Bounding Box HUD Overlay */
-.hud-bbox {
-  position: absolute;
-  border: 2px solid var(--color-accent);
-  pointer-events: none;
-  z-index: 5;
-  transition: inset var(--dur-short) var(--ease-out);
-}
-
-.hud-corner-tl { top: -2px; left: -2px; border-width: 3px 0 0 3px; border-color: var(--color-ink); }
-.hud-corner-tr { top: -2px; right: -2px; border-width: 3px 3px 0 0; border-color: var(--color-ink); }
-.hud-corner-bl { bottom: -2px; left: -2px; border-width: 0 0 3px 3px; border-color: var(--color-ink); }
-.hud-corner-br { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; border-color: var(--color-ink); }
-
-.hud-landmark-dot {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  background: var(--color-ink);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 6;
-}
-
-/* Quality Gate Meters */
-.quality-gates-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-sm);
-}
-
-.gate-metric {
-  background: oklch(16% 0.014 195 / 0.40);
-  padding: var(--space-sm);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-rule);
-}
-
-.gate-metric-title {
-  font-size: var(--text-xs);
-  color: var(--color-ink-3);
-  margin-bottom: var(--space-3xs);
-  display: flex;
-  justify-content: space-between;
-}
-
-.gate-metric-val {
-  font-size: var(--text-base);
-  font-weight: 700;
-  font-family: var(--font-mono);
-}
-
-.gate-progress-bar {
-  height: 4px;
-  background: oklch(28% 0.012 195 / 0.50);
-  border-radius: 2px;
-  margin-top: var(--space-2xs);
-  overflow: hidden;
-}
-
-.gate-progress-fill {
-  height: 100%;
-  background: var(--color-accent);
-  transition: width var(--dur-long) var(--ease-out);
-}
-
-/* ─── Pipeline Control Center ─── */
-.control-dock {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-lg);
-  padding: var(--space-md);
-  background: var(--color-paper-glass);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-md);
-}
-
-/* ─── Active Stage Detail Cards ─── */
-.stage-detail-container {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
-}
-
-.stage-banner {
-  padding: var(--space-md) var(--space-lg);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.stage-banner-verified {
-  background: var(--color-emerald-dim);
-  border: 1px solid oklch(72% 0.17 160 / 0.30);
-  color: var(--color-emerald);
-}
-
-.stage-banner-tampered {
-  background: var(--color-crimson-dim);
-  border: 1px solid oklch(63% 0.22 25 / 0.40);
-  color: var(--color-crimson);
-  animation: flashRed 1.8s infinite;
+@media (max-width: 48rem) {
+  .app-nav { flex-wrap: wrap; height: auto; padding: var(--space-2) var(--page-gutter); }
+  .app-nav-tabs { order: 3; flex-basis: 100%; margin-left: 0; }
+  .app-nav-status { margin-left: auto; }
+  .app-nav-brand { margin-right: auto; }
+  .app-status-chip { display: none; }
 }

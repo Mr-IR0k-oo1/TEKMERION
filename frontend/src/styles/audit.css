@@ -1,149 +1,81 @@
-/* Audit Explorer Styles */
+/* Audit Activity Timeline — Apple-inspired */
 
-.audit-container {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-lg);
+.audit-view {
+  max-width: 760px;
+  margin: 0 auto;
 }
 
-.audit-layout {
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  gap: var(--space-lg);
-}
-
-@media (max-width: 68.75rem) {
-  .audit-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Run Bundle Tree Card */
-.bundle-files-card {
-  background: var(--color-paper-glass);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-md);
-  padding: var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-}
-
-.bundle-files-card h2,
-.audit-terminal-card h2 {
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--color-ink-2);
-}
-
-.bundle-tree {
-  background: oklch(8% 0.010 195);
-  border: 1px solid var(--color-rule);
-  border-radius: var(--radius-sm);
-  padding: var(--space-md);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-}
-
-.bundle-item {
+.audit-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  color: var(--color-ink-2);
-  cursor: pointer;
-  padding: var(--space-2xs) var(--space-xs);
-  border-radius: var(--radius-sm);
-  transition: background-color var(--dur-micro) var(--ease-out),
-              color var(--dur-micro) var(--ease-out);
-}
-
-@media (hover: hover) {
-  .bundle-item:hover,
-  .bundle-item.active {
-    background: var(--color-accent-dim);
-    color: var(--color-accent);
-  }
-}
-
-.bundle-item:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 1px;
-}
-
-.bundle-dir {
-  color: var(--color-accent);
-  font-weight: 600;
-}
-
-.bundle-file-size {
-  margin-left: auto;
-  font-size: var(--text-xs);
-  color: var(--color-ink-3);
-}
-
-/* Terminal Log Card — typographic frame, no fake chrome */
-.audit-terminal-card {
-  background: oklch(8% 0.010 195);
-  border: 1px solid var(--color-rule);
-  border-top: var(--rule-hair) solid var(--color-rule);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.terminal-header {
-  background: var(--color-paper-2);
-  border-bottom: var(--rule-hair) solid var(--color-rule);
-  padding: var(--space-sm) var(--space-md);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
-.terminal-title {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-ink-2);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.terminal-body {
-  padding: var(--space-md);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: 1.7;
-  max-height: 520px;
-  overflow-y: auto;
+.audit-timeline {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
 }
 
-.terminal-line {
+.audit-row {
+  display: grid;
+  grid-template-columns: 64px 20px 1fr;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.audit-row-time {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  text-align: right;
+  padding-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+.audit-row-marker {
+  position: relative;
   display: flex;
-  gap: var(--space-sm);
-  word-break: break-all;
+  justify-content: center;
 }
 
-.log-ts {
-  color: var(--color-ink-3);
+.audit-row-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
   flex-shrink: 0;
 }
 
-.log-msg-info { color: var(--color-ink-2); }
-.log-msg-success { color: var(--color-emerald); }
-.log-msg-warn { color: var(--color-amber); }
-.log-msg-error { color: var(--color-crimson); }
+.audit-row-line {
+  position: absolute;
+  top: 18px;
+  bottom: -6px;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.audit-row-marker-default .audit-row-dot { background: var(--color-text-tertiary); }
+.audit-row-marker-success .audit-row-dot { background: var(--color-success); }
+.audit-row-marker-warning .audit-row-dot { background: var(--color-warning); }
+.audit-row-marker-error .audit-row-dot { background: var(--color-error); }
+
+.audit-row-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-bottom: var(--space-2);
+}
+
+.audit-row-event {
+  font-size: var(--text-base);
+  color: var(--color-text);
+  line-height: var(--leading-normal);
+}
+
+.audit-row-detail {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  line-height: var(--leading-normal);
+  overflow-wrap: anywhere;
+}

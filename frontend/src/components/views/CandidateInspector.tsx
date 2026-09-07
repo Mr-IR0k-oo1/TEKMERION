@@ -31,41 +31,37 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
       {/* Header & Filter Controls */}
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Users size={20} color="var(--cyan-bright)" /> Public Candidate Inspector
+          <h2 style={{ fontSize: '20px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Users size={18} color="var(--color-accent)" /> Public Candidate Inspector
           </h2>
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+          <p style={{ fontSize: '13px', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
             Discovered through reverse-image discovery providers and independently verified locally via ArcFace embeddings.
           </p>
         </div>
 
         {/* Filter Badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Filter size={15} color="var(--text-muted)" />
+          <Filter size={14} color="var(--color-text-tertiary)" />
           <button
-            className={`btn btn-secondary ${filter === 'all' ? 'active' : ''}`}
-            style={{ padding: '4px 10px', fontSize: '12px' }}
+            className={`btn btn-secondary btn-sm ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
             All ({candidates.length})
           </button>
           <button
-            className={`btn btn-secondary ${filter === 'verified' ? 'active' : ''}`}
-            style={{ padding: '4px 10px', fontSize: '12px' }}
+            className={`btn btn-secondary btn-sm ${filter === 'verified' ? 'active' : ''}`}
             onClick={() => setFilter('verified')}
           >
             Verified ({candidates.filter((c) => c.status === 'verified').length})
           </button>
           <button
-            className={`btn btn-secondary ${filter === 'below_threshold' ? 'active' : ''}`}
-            style={{ padding: '4px 10px', fontSize: '12px' }}
+            className={`btn btn-secondary btn-sm ${filter === 'below_threshold' ? 'active' : ''}`}
             onClick={() => setFilter('below_threshold')}
           >
             Below Threshold
           </button>
           <button
-            className={`btn btn-secondary ${filter === 'no_face' ? 'active' : ''}`}
-            style={{ padding: '4px 10px', fontSize: '12px' }}
+            className={`btn btn-secondary btn-sm ${filter === 'no_face' ? 'active' : ''}`}
             onClick={() => setFilter('no_face')}
           >
             No Face
@@ -75,7 +71,7 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
 
       {/* Grid of Candidates */}
       {filtered.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
+        <div className="card" style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--color-text-tertiary)' }}>
           No candidates found matching the selected filter.
         </div>
       ) : (
@@ -131,7 +127,7 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
                     <span className="gauge-label">ArcFace Biometric Cosine Similarity:</span>
                     <span
                       className="gauge-value"
-                      style={{ color: isVerified ? 'var(--emerald-verified)' : 'var(--amber-warn)' }}
+                      style={{ color: isVerified ? 'var(--color-success)' : 'var(--color-warning)' }}
                     >
                       {(similarity * 100).toFixed(2)}%
                     </span>
@@ -146,9 +142,9 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
                     <div className="threshold-marker" title="Forensic Acceptance Threshold: 80%" />
                   </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-muted)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-text-tertiary)' }}>
                     <span>0% Non-Match</span>
-                    <span style={{ color: 'var(--color-ink)', fontWeight: 600 }}>Threshold: 80.0%</span>
+                    <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>Threshold: 80.0%</span>
                     <span>100% Exact</span>
                   </div>
                 </div>
@@ -159,7 +155,7 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
                     <div title="Query Face">
                       <img src={queryImageSrc} alt="Query Face" className="candidate-thumb" />
                     </div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>vs</span>
+                    <span style={{ color: 'var(--color-text-tertiary)', fontSize: '12px' }}>vs</span>
                     <div title="Candidate Repository Asset">
                       <img
                         src={candidate.thumbnail_url || candidate.image_url}
@@ -175,7 +171,7 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
 
                   <div className="candidate-snippet">
                     {error_message ? (
-                      <span style={{ color: 'var(--crimson-tamper)' }}>{error_message}</span>
+                      <span style={{ color: 'var(--color-error)' }}>{error_message}</span>
                     ) : (
                       candidate.snippet || 'No snippet description available.'
                     )}
@@ -192,7 +188,7 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
                           </span>
                         )}
                         {candidate.author && (
-                          <span style={{ color: 'var(--text-muted)' }}>
+                          <span style={{ color: 'var(--color-text-tertiary)' }}>
                             by {candidate.author}
                           </span>
                         )}
@@ -203,8 +199,8 @@ export const CandidateInspector: React.FC<CandidateInspectorProps> = ({
 
                 {/* Footer: Candidate Image SHA-256 Digest */}
                 <div className="candidate-footer">
-                  <span style={{ color: 'var(--text-muted)' }}>Face Quality: {(quality * 100).toFixed(1)}%</span>
-                  <span className="mono" style={{ color: 'var(--cyan-bright)' }}>
+                  <span style={{ color: 'var(--color-text-tertiary)' }}>Face Quality: {(quality * 100).toFixed(1)}%</span>
+                  <span className="mono" style={{ color: 'var(--color-accent)' }}>
                     SHA: {candidate_image_hash.substring(0, 8)}...{candidate_image_hash.substring(candidate_image_hash.length - 6)}
                   </span>
                 </div>

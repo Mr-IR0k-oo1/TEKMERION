@@ -1,107 +1,181 @@
-/* Hallmark · macrostructure: Workbench · tone: technical · anchor hue: 195 (cyan)
- * genre: atmospheric · theme: Midnight · nav: N8 Terminal command · footer: Ft4 Dense colophon
- * enrichment: none (typography only)
- */
+/* TEKMERION Design Tokens — Minimalist Editorial UI */
 
 :root {
-  /* ─── Paper (dark surface — anchor hue 195, chroma 0.008) ─── */
-  --color-paper:      oklch(12% 0.012 195);
-  --color-paper-2:    oklch(16% 0.014 195);
-  --color-paper-3:    oklch(20% 0.016 195);
-  --color-paper-4:    oklch(25% 0.014 195);
-  --color-paper-glass: oklch(16% 0.014 195 / 0.75);
+  /* ─── Background ─── */
+  --color-bg: #FBFBFA;
 
-  /* ─── Ink ─── */
-  --color-ink:        oklch(94% 0.008 195);
-  --color-ink-2:      oklch(68% 0.010 210);
-  --color-ink-3:      oklch(48% 0.010 210);
-  --color-ink-mono:   oklch(72% 0.06 210);
+  /* ─── Surfaces ─── */
+  --color-surface: #FFFFFF;
+  --color-surface-secondary: #F9F9F8;
+  --color-surface-tertiary: #F4F4F4;
+  --color-surface-elevated: #FFFFFF;
 
-  /* ─── Accent — cyan (primary) ─── */
-  --color-accent:     oklch(82% 0.18 195);
-  --color-accent-glow: oklch(82% 0.18 195 / 0.30);
-  --color-accent-dim: oklch(82% 0.18 195 / 0.12);
+  /* ─── Text ─── */
+  --color-text: #111111;
+  --color-text-secondary: #787774;
+  --color-text-tertiary: #A0A0A0;
+  --color-text-quaternary: #C4C4C4;
 
-  /* ─── Semantic accents ─── */
-  --color-emerald:    oklch(72% 0.17 160);
-  --color-emerald-glow: oklch(72% 0.17 160 / 0.30);
-  --color-emerald-dim: oklch(72% 0.17 160 / 0.12);
+  /* ─── Accent ─── */
+  --color-accent: #111111;
+  --color-accent-hover: #333333;
+  --color-accent-active: #000000;
+  --color-accent-dim: rgba(17, 17, 17, 0.05);
+  --color-accent-subtle: rgba(17, 17, 17, 0.03);
 
-  --color-amber:      oklch(78% 0.16 75);
-  --color-amber-glow: oklch(78% 0.16 75 / 0.30);
-  --color-amber-dim:  oklch(78% 0.16 75 / 0.12);
+  /* ─── Semantic: Success (Pale Green) ─── */
+  --color-success: #346538;
+  --color-success-dim: #EDF3EC;
 
-  --color-crimson:    oklch(63% 0.22 25);
-  --color-crimson-glow: oklch(63% 0.22 25 / 0.40);
-  --color-crimson-dim: oklch(63% 0.22 25 / 0.15);
+  /* ─── Semantic: Warning (Pale Yellow) ─── */
+  --color-warning: #956400;
+  --color-warning-dim: #FBF3DB;
 
-  --color-violet:     oklch(65% 0.22 300);
-  --color-violet-glow: oklch(65% 0.22 300 / 0.30);
-  --color-violet-dim: oklch(65% 0.22 300 / 0.12);
+  /* ─── Semantic: Error (Pale Red) ─── */
+  --color-error: #9F2F2D;
+  --color-error-dim: #FDEBEC;
 
-  /* ─── Focus ─── */
-  --color-focus:      oklch(82% 0.18 195);
+  /* ─── Semantic: Info (Pale Blue) ─── */
+  --color-info: #1F6C9F;
+  --color-info-dim: #E1F3FE;
 
-  /* ─── Rules / borders ─── */
-  --color-rule:       oklch(28% 0.012 195);
-  --color-rule-glow:  oklch(82% 0.18 195 / 0.25);
+  /* ─── Borders ─── */
+  --color-border: #EAEAEA;
+  --color-border-secondary: #F0F0F0;
+  --color-border-focus: #111111;
+
+  /* ─── Overlays ─── */
+  --color-overlay: rgba(255, 255, 255, 0.8);
+  --color-scrim: rgba(255, 255, 255, 0.95);
 
   /* ─── Spacing (4pt base) ─── */
-  --space-3xs:  0.125rem;  /*  2px */
-  --space-2xs:  0.25rem;   /*  4px */
-  --space-xs:   0.5rem;    /*  8px */
-  --space-sm:   0.75rem;   /* 12px */
-  --space-md:   1rem;      /* 16px */
-  --space-lg:   1.5rem;    /* 24px */
-  --space-xl:   2.5rem;    /* 40px */
-  --space-2xl:  4rem;      /* 64px */
-  --space-3xl:  6rem;      /* 96px */
-  --space-4xl:  9rem;      /* 144px */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
 
   /* ─── Typography ─── */
-  --font-display: 'Space Grotesk', 'Outfit', ui-sans-serif, system-ui, sans-serif;
-  --font-body:    'Outfit', ui-sans-serif, system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Source Code Pro', monospace;
+  --font-sans: 'SF Pro Display', 'Geist Sans', 'Helvetica Neue', 'Switzer', sans-serif;
+  --font-serif: 'Lyon Text', 'Newsreader', 'Playfair Display', 'Instrument Serif', serif;
+  --font-mono: 'Geist Mono', 'SF Mono', 'JetBrains Mono', monospace;
 
-  /* Scale — major third (1.25) */
-  --text-xs:    0.64rem;   /* 10.24px */
-  --text-sm:    0.8rem;    /* 12.8px  */
-  --text-base:  1rem;      /* 16px    */
-  --text-md:    1.25rem;   /* 20px    */
-  --text-lg:    1.5625rem; /* 25px    */
-  --text-xl:    1.9531rem; /* 31.25px */
-  --text-2xl:   2.4414rem; /* 39px    */
-  --text-3xl:   clamp(2.75rem, 5vw + 1rem, 4.5rem);
+  /* ─── Font Sizes ─── */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+  --text-4xl: 40px;
 
-  /* ─── Radii ─── */
-  --radius-sm:   6px;
-  --radius-md:   10px;
-  --radius-lg:   16px;
+  /* ─── Font Weights ─── */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 600;
+
+  /* ─── Line Heights ─── */
+  --leading-tight: 1.1;
+  --leading-snug: 1.3;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.75;
+
+  /* ─── Border Radius ─── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
   --radius-full: 9999px;
 
-  /* ─── Easings ─── */
-  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in:      cubic-bezier(0.7, 0, 0.84, 0);
-  --ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+  /* ─── Shadows ─── */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.06);
+  --shadow-inset: none;
 
-  /* ─── Durations ─── */
-  --dur-micro: 120ms;
-  --dur-short: 220ms;
-  --dur-long:  420ms;
+  /* ─── Transitions ─── */
+  --ease-default: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --duration-slower: 600ms;
 
-  /* ─── Z-index scale ─── */
-  --z-base:     1;
-  --z-raised:   10;
+  /* ─── Z-index ─── */
+  --z-base: 0;
+  --z-raised: 10;
   --z-dropdown: 100;
-  --z-sticky:   200;
-  --z-modal:    400;
-  --z-toast:    500;
+  --z-sticky: 200;
+  --z-overlay: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
 
   /* ─── Layout ─── */
-  --header-height: 72px;
-  --page-gutter:   clamp(1rem, 4vw, 2rem);
-  --max-width:     1400px;
+  --header-height: 52px;
+  --page-gutter: clamp(16px, 3vw, 32px);
+  --max-width: 1024px; /* max-w-4xl / 5xl */
 
-  /* ─── Rules ─── */
+  /* ─── Legacy aliases (backward compat with existing components) ─── */
+  --color-paper: var(--color-surface);
+  --color-paper-2: var(--color-surface-secondary);
+  --color-paper-3: var(--color-surface-tertiary);
+  --color-paper-4: var(--color-surface-elevated);
+  --color-paper-glass: var(--color-surface);
+  --color-ink: var(--color-text);
+  --color-ink-2: var(--color-text-secondary);
+  --color-ink-3: var(--color-text-tertiary);
+  --color-ink-mono: var(--color-text-secondary);
+  --color-rule: var(--color-border);
+  --color-rule-glow: var(--color-border);
+  --color-focus: var(--color-border-focus);
+  --color-emerald: var(--color-success);
+  --color-emerald-dim: var(--color-success-dim);
+  --color-amber: var(--color-warning);
+  --color-amber-dim: var(--color-warning-dim);
+  --color-crimson: var(--color-error);
+  --color-crimson-dim: var(--color-error-dim);
+  --color-violet: #1F6C9F;
+  --color-violet-dim: #E1F3FE;
+  --color-accent-glow: none;
+  --color-emerald-glow: none;
+  --color-amber-glow: none;
+  --color-crimson-glow: none;
+  --color-violet-glow: none;
+  --shadow-card: var(--shadow-sm);
+  --shadow-cyan: none;
+  --shadow-emerald: none;
+  --shadow-crimson: none;
+  --font-display: var(--font-serif);
+  --font-body: var(--font-sans);
+  --text-md: var(--text-xl);
   --rule-hair: 1px;
+  --dur-micro: var(--duration-fast);
+  --dur-short: var(--duration-normal);
+  --dur-long: var(--duration-slow);
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --space-2xl: 64px;
+  --space-3xl: 96px;
+  --space-4xl: 144px;
 }

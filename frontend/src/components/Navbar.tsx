@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ViewTab } from '../types/forensic';
-import { ShieldCheck, AlertTriangle, Check, Copy } from 'lucide-react';
+import { Check, Copy, Search, Briefcase, FileSearch, ShieldCheck, Settings } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: ViewTab;
@@ -11,21 +11,12 @@ interface NavbarProps {
   backendOnline?: boolean;
 }
 
-const TAB_FLAGS: Record<ViewTab, string> = {
-  pipeline:   '--pipeline',
-  merkle:     '--merkle',
-  tamper:     '--tamper',
-  candidates: '--candidates',
-  audit:      '--audit',
-};
-
-const TAB_LABELS: Record<ViewTab, string> = {
-  pipeline:   'Pipeline Studio',
-  merkle:     'Merkle Tree',
-  tamper:     'Tamper Lab',
-  candidates: 'Candidates',
-  audit:      'Audit',
-};
+const NAV_ITEMS: { tab: ViewTab; label: string; icon: React.ElementType }[] = [
+  { tab: 'pipeline', label: 'Investigate', icon: Search },
+  { tab: 'candidates', label: 'Cases', icon: Briefcase },
+  { tab: 'evidence', label: 'Evidence', icon: FileSearch },
+  { tab: 'audit', label: 'Audit', icon: ShieldCheck },
+];
 
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
@@ -37,6 +28,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
 
+  const isActive = (tab: ViewTab) =>
+    tab === 'pipeline' || tab === 'candidates' || tab === 'audit'
+      ? activeTab === tab
+      : activeTab === 'evidence' || activeTab === 'merkle' || activeTab === 'blockchain' || activeTab === 'tamper';
+
   const handleCopyRunId = () => {
     navigator.clipboard.writeText(runId);
     setCopied(true);
@@ -44,67 +40,43 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="nav-term-header">
-      {/* Compact telemetry strip */}
-      <div className="telemetry-strip">
-        <div className="telemetry-strip__left">
-          <span className="brand-mark">
-            <ShieldCheck size={15} />
-            <span className="brand-name">TEKMERION</span>
-          </span>
-          <span className="telemetry-sep" />
-          <span className="telemetry-chip">
-            <span className="pulse-dot" style={{ color: backendOnline ? 'var(--color-emerald)' : 'var(--color-amber)' }} />
-            <span className="telemetry-chip__label">Backend</span>
-            <span className="mono" style={{ color: backendOnline ? 'var(--color-emerald)' : 'var(--color-amber)' }}>
-              {backendOnline ? 'ONLINE' : 'LOCAL'}
-            </span>
-          </span>
-          <span className="telemetry-chip">
-            <span className="pulse-dot" style={{ color: 'var(--color-violet)' }} />
-            <span className="telemetry-chip__label">Chain</span>
-            <span className="mono" style={{ color: 'var(--color-violet)' }}>Sepolia</span>
-          </span>
-          <span className="telemetry-chip" title={contractAddress}>
-            <span className="telemetry-chip__label">Contract</span>
-            <span className="mono">{contractAddress.slice(0, 6)}…{contractAddress.slice(-4)}</span>
-          </span>
-          <span className="telemetry-chip">
-            <span className="telemetry-chip__label">Run</span>
-            <button onClick={handleCopyRunId} className="run-id-btn mono">
-              {runId}
-              {copied
-                ? <Check size={11} style={{ color: 'var(--color-emerald)' }} />
-                : <Copy size={11} style={{ opacity: 0.5 }} />}
-            </button>
-          </span>
-        </div>
-
-        {isTampered && (
-          <div className="tamper-alert-strip">
-            <AlertTriangle size={13} />
-            <span>TAMPER DETECTED</span>
-          </div>
-        )}
+    <header className="app-nav">
+      <div className="app-nav-brand">
+        <span className="app-nav-name">TEKMERION</span>
       </div>
 
-      {/* Terminal command nav */}
-      <nav className="nav-term">
-        <div className="nav-term__line">
-          <span className="nav-term__prompt">&gt;</span>
-          <span className="nav-term__prog">tekmerion</span>
-          {(Object.keys(TAB_FLAGS) as ViewTab[]).map((tab) => (
+      <nav className="app-nav-tabs" aria-label="Sections">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
             <button
-              key={tab}
-              className={`nav-term__flag ${activeTab === tab ? 'is-active' : ''} ${tab === 'tamper' && isTampered ? 'is-alert' : ''}`}
-              onClick={() => onSelectTab(tab)}
+              key={item.tab}
+              className={`app-nav-tab ${isActive(item.tab) ? 'is-active' : ''}`}
+              onClick={() => onSelectTab(item.tab)}
             >
-              {TAB_FLAGS[tab]}
+              <Icon size={14} strokeWidth={2} />
+              {item.label}
+              {item.tab === 'evidence' && isTampered && <span className="app-nav-alert-dot" />}
             </button>
-          ))}
-          <span className="nav-term__caret" aria-hidden="true">▮</span>
-        </div>
+          );
+        })}
       </nav>
+
+      <div className="app-nav-status">
+        <span className="app-status-chip" title={contractAddress}>
+          <span className={`app-status-dot ${backendOnline ? 'is-online' : 'is-local'}`} />
+          <span>{backendOnline ? 'Backend Online' : 'Backend Local'}</span>
+        </span>
+        <span className="app-status-sep" />
+        <button className="app-run-id mono" onClick={handleCopyRunId} aria-label="Copy run ID">
+          {runId}
+          {copied ? <Check size={11} strokeWidth={2.5} /> : <Copy size={11} strokeWidth={1.75} />}
+        </button>
+        <span className="app-status-sep" />
+        <button className="app-settings-btn" aria-label="Settings">
+          <Settings size={14} strokeWidth={1.75} />
+        </button>
+      </div>
     </header>
   );
 };

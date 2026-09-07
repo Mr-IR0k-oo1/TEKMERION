@@ -61,7 +61,7 @@ export const PIPELINE_STAGES: PipelineStageInfo[] = [
 
 export type PipelineStatus = 'idle' | 'running' | 'completed' | 'no_match' | 'tampered' | 'error';
 
-export type ViewTab = 'pipeline' | 'merkle' | 'tamper' | 'candidates' | 'audit';
+export type ViewTab = 'pipeline' | 'evidence' | 'merkle' | 'blockchain' | 'tamper' | 'candidates' | 'audit';
 
 export interface FaceQualityAssessment {
   status: 'pass' | 'fail' | 'warn' | 'idle';
