@@ -1,0 +1,168 @@
+/* Tamper Laboratory Styles */
+
+.tamper-lab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tamper-intro-card {
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(19, 27, 44, 0.8) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tamper-intro-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tamper-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .tamper-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Field Mutator Form */
+.mutator-card {
+  background: var(--bg-surface-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+}
+
+.form-input,
+.form-textarea,
+.form-select {
+  width: 100%;
+  padding: 10px 14px;
+  background: #060910;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus,
+.form-textarea:focus,
+.form-select:focus {
+  outline: none;
+  border-color: var(--cyan-bright);
+}
+
+.form-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+/* Comparison Terminal Card */
+.comparison-card {
+  background: var(--bg-surface-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.comparison-card.mismatch-active {
+  border-color: var(--crimson-tamper);
+  box-shadow: var(--shadow-crimson);
+}
+
+.mismatch-banner {
+  padding: 16px 20px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-weight: 700;
+}
+
+.mismatch-banner-red {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid var(--crimson-tamper);
+  color: #ff4d4d;
+}
+
+.mismatch-banner-green {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid var(--emerald-verified);
+  color: var(--emerald-verified);
+}
+
+.roots-compare-box {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: #04060a;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+}
+
+.root-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.root-entry-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.root-entry-hash {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  word-break: break-all;
+}
+
+.root-entry-hash.tampered-hash {
+  color: #ff4d4d;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.root-entry-hash.anchored-hash {
+  color: var(--cyan-bright);
+  background: rgba(0, 240, 255, 0.08);
+}

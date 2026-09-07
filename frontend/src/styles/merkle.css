@@ -1,0 +1,178 @@
+/* Merkle Tree Visualizer Styles */
+
+.merkle-studio-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.merkle-header-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  background: var(--bg-surface-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+}
+
+.merkle-canvas-card {
+  position: relative;
+  background: radial-gradient(circle at 50% 50%, rgba(19, 27, 44, 0.9) 0%, rgba(7, 10, 17, 0.95) 100%);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  padding: 40px 20px;
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  overflow-x: auto;
+}
+
+/* Tree Levels */
+.tree-level {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  width: 100%;
+  position: relative;
+  z-index: 2;
+}
+
+.tree-level-root {
+  margin-bottom: 24px;
+}
+
+.tree-level-intermediate {
+  margin-bottom: 28px;
+}
+
+.tree-level-leaves {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  width: 100%;
+  max-width: 1300px;
+}
+
+@media (max-width: 1100px) {
+  .tree-level-leaves {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Node Elements */
+.merkle-node {
+  background: rgba(12, 18, 30, 0.85);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-sm);
+  padding: 14px 18px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+
+.merkle-node:hover {
+  transform: translateY(-2px);
+  border-color: var(--cyan-bright);
+  box-shadow: var(--shadow-cyan);
+}
+
+.merkle-node.node-root {
+  min-width: 380px;
+  border-width: 2px;
+  border-color: var(--cyan-bright);
+  background: rgba(0, 240, 255, 0.05);
+}
+
+.merkle-node.node-root.tampered {
+  border-color: var(--crimson-tamper);
+  background: rgba(239, 68, 68, 0.08);
+  box-shadow: var(--shadow-crimson);
+}
+
+.merkle-node.node-leaf {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(26, 36, 58, 0.6);
+}
+
+.merkle-node.node-leaf.tampered {
+  border-color: var(--crimson-tamper);
+  background: rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+  animation: flashRed 1.8s infinite;
+}
+
+.node-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.node-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cyan-bright);
+}
+
+.node-hash {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  word-break: break-all;
+}
+
+.node-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* SVG Connectors */
+.tree-connector-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Canonical JSON Drawer / Modal */
+.inspector-drawer {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  margin-top: 20px;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.json-code-block {
+  background: #04060a;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: #38bdf8;
+  overflow-x: auto;
+  max-height: 380px;
+}

@@ -1,0 +1,159 @@
+/* Candidate Inspector Styles */
+
+.inspector-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.candidates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 20px;
+}
+
+.candidate-card {
+  background: var(--bg-surface-glass);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.candidate-card:hover {
+  border-color: rgba(0, 240, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+.candidate-card.verified {
+  border-left: 4px solid var(--emerald-verified);
+}
+
+.candidate-card.below-threshold {
+  border-left: 4px solid var(--amber-warn);
+}
+
+.candidate-card.no-face,
+.candidate-card.error {
+  border-left: 4px solid var(--crimson-tamper);
+}
+
+.candidate-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.candidate-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.candidate-domain {
+  font-size: 12px;
+  color: var(--cyan-bright);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+/* Biometric Comparison Gauge */
+.biometric-gauge-box {
+  background: #060910;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gauge-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gauge-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.gauge-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.similarity-bar-container {
+  position: relative;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.similarity-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.similarity-fill.pass {
+  background: linear-gradient(90deg, #00f0ff, #10b981);
+}
+
+.similarity-fill.fail {
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+
+.threshold-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 80%; /* 0.80 threshold */
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 6px #fff;
+}
+
+.candidate-media-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.candidate-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-dim);
+  object-fit: cover;
+  background: #000;
+}
+
+.candidate-snippet {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.candidate-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-dim);
+  font-size: 11px;
+}
