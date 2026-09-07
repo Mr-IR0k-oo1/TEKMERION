@@ -2006,6 +2006,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tekmerion-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "url",
+]
+
+[[package]]
 name = "tekmerion-core"
 version = "0.1.0"
 dependencies = [
@@ -2070,6 +2081,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "tekmerion-security"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "tekmerion-storage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tekmerion-core",
+ "tekmerion-evidence",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "tekmerion-tui"
 version = "0.1.0"
 dependencies = [
@@ -2083,10 +2121,13 @@ dependencies = [
  "sha2",
  "tekmerion-audit",
  "tekmerion-blockchain",
+ "tekmerion-config",
  "tekmerion-core",
  "tekmerion-discovery",
  "tekmerion-evidence",
  "tekmerion-face",
+ "tekmerion-security",
+ "tekmerion-storage",
  "tekmerion-verification",
  "tokio",
  "url",

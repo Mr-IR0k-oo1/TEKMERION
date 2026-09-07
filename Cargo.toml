@@ -2,10 +2,13 @@
 members = [
     "apps/tui",
     "crates/core",
+    "crates/config",
+    "crates/security",
     "crates/face",
     "crates/discovery",
     "crates/verification",
     "crates/evidence",
+    "crates/storage",
     "crates/blockchain",
     "crates/audit",
 ]
