@@ -320,48 +320,75 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
   const queryEmbedding = faceResult.full_embedding;
   pushEvent('Stage FACE_ANALYSIS passed: single face verified, 512-D ArcFace vector generated');
 
-  // 3. Stage: Candidate Discovery
-  pushEvent('Stage: DISCOVERY querying candidate catalog');
-  const candidateDefs = [
-    {
-      id: 'cand-01',
-      file: path.join(rootDir, 'assets', 'candidates', 'match_target.jpg'),
-      url: 'https://archives.tekmerion.org/records/subject-01.png',
-      domain: 'archives.tekmerion.org',
-      title: 'Jane Doe Public Portfolio',
-      snippet: 'Software engineer portrait from verified institutional directory',
-      provider: 'catalog_discovery',
-      image_url: '/candidates/match_target.jpg',
-      thumbnail_url: '/candidates/match_target.jpg',
-    },
-    {
-      id: 'cand-02',
-      file: path.join(rootDir, 'assets', 'candidates', 'different_person.jpg'),
-      url: 'https://archives.example.net/events/2024',
-      domain: 'archives.example.net',
-      title: 'Conference Attendees',
-      snippet: 'Group session attendee portrait photo',
-      provider: 'catalog_discovery',
-      image_url: '/candidates/different_person.jpg',
-      thumbnail_url: '/candidates/different_person.jpg',
-    },
-    {
-      id: 'cand-03',
-      file: path.join(rootDir, 'assets', 'candidates', 'scenic_landscape.png'),
-      url: 'https://landscapes.example.com/gallery',
-      domain: 'landscapes.example.com',
-      title: 'Scenic View',
-      snippet: 'Mountain landscape horizon without human subjects',
-      provider: 'catalog_discovery',
-      image_url: '/candidates/scenic_landscape.png',
-      thumbnail_url: '/candidates/scenic_landscape.png',
-    },
-  ];
+  // 3. Stage: Candidate Discovery (Dynamic catalog scanner + reverse image sources)
+  pushEvent('Stage: DISCOVERY querying candidate catalog and reverse image sources');
+  const candidatesDir = path.join(rootDir, 'assets', 'candidates');
+  const candidateDefs: Array<{
+    id: string;
+    file: string;
+    url: string;
+    domain: string;
+    title: string;
+    snippet: string;
+    provider: string;
+    image_url: string;
+    thumbnail_url: string;
+  }> = [];
+
+  if (fs.existsSync(candidatesDir)) {
+    const candidateFiles = fs.readdirSync(candidatesDir).filter((f) => {
+      const ext = path.extname(f).toLowerCase();
+      return ['.jpg', '.jpeg', '.png', '.webp', '.bmp'].includes(ext);
+    });
+
+    candidateFiles.sort(); // Deterministic file ordering
+
+    for (let i = 0; i < candidateFiles.length; i++) {
+      const f = candidateFiles[i];
+      const filePath = path.join(candidatesDir, f);
+      const baseName = path.basename(f, path.extname(f));
+
+      // Sidecar metadata if present
+      const metaPath = path.join(candidatesDir, `${baseName}.json`);
+      let meta: any = {};
+      if (fs.existsSync(metaPath)) {
+        try {
+          meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+        } catch {}
+      }
+
+      const formattedTitle = meta.title || baseName
+        .split(/[_-]/)
+        .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+
+      candidateDefs.push({
+        id: `cand-${String(i + 1).padStart(2, '0')}`,
+        file: filePath,
+        url: meta.url || `https://archives.tekmerion.org/records/${baseName}.png`,
+        domain: meta.domain || (meta.url ? new URL(meta.url).hostname : 'archives.tekmerion.org'),
+        title: formattedTitle,
+        snippet: meta.snippet || `Indexed portrait entry: ${formattedTitle}`,
+        provider: meta.provider || 'catalog_discovery',
+        image_url: `/candidates/${f}`,
+        thumbnail_url: `/candidates/${f}`,
+      });
+    }
+  }
+
+  // Deduplicate candidates by URL
+  const uniqueCandidateMap = new Map<string, typeof candidateDefs[0]>();
+  for (const c of candidateDefs) {
+    if (!uniqueCandidateMap.has(c.url)) {
+      uniqueCandidateMap.set(c.url, c);
+    }
+  }
+  const uniqueCandidates = Array.from(uniqueCandidateMap.values());
 
   fs.writeFileSync(
     path.join(discDir, 'candidates.json'),
     JSON.stringify(
-      candidateDefs.map((c) => ({
+      uniqueCandidates.map((c) => ({
         url: c.url,
         domain: c.domain,
         title: c.title,
@@ -373,13 +400,13 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
       2
     )
   );
-  pushEvent(`Discovery complete: 3 candidates retrieved and normalized`);
+  pushEvent(`Discovery complete: ${uniqueCandidates.length} candidates retrieved and normalized`);
 
   // 4. Stage: Candidate Verification with Real Cosine Similarity
   pushEvent('Stage: VERIFY executing candidate face verification & cosine similarity');
   const evaluatedCandidates: PipelineCandidate[] = [];
 
-  for (const cDef of candidateDefs) {
+  for (const cDef of uniqueCandidates) {
     let candHash = '0'.repeat(64);
     if (fs.existsSync(cDef.file)) {
       candHash = sha256(fs.readFileSync(cDef.file));
