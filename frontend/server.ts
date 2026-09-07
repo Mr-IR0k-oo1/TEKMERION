@@ -2,10 +2,11 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { analyzeImageWithWorker } from './src/server/workerBridge';
+import { analyzeImageWithWorker, getWorkspaceRoot } from './src/server/workerBridge';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
-const UPLOAD_DIR = path.resolve(process.cwd(), '..', 'runs', 'temp_uploads');
+const ROOT_DIR = getWorkspaceRoot();
+const UPLOAD_DIR = path.join(ROOT_DIR, 'runs', 'temp_uploads');
 
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -116,13 +117,13 @@ const server = http.createServer(async (req, res) => {
               } else if (parsed.image_path) {
                 const resolved = path.isAbsolute(parsed.image_path)
                   ? parsed.image_path
-                  : path.resolve(process.cwd(), '..', parsed.image_path);
+                  : path.join(ROOT_DIR, parsed.image_path);
                 if (fs.existsSync(resolved)) {
                   imageBuffer = fs.readFileSync(resolved);
                   originalName = path.basename(resolved);
                 }
               } else if (parsed.filename) {
-                const assetPath = path.resolve(process.cwd(), '..', 'assets', parsed.filename);
+                const assetPath = path.join(ROOT_DIR, 'assets', parsed.filename);
                 if (fs.existsSync(assetPath)) {
                   imageBuffer = fs.readFileSync(assetPath);
                   originalName = parsed.filename;
@@ -138,7 +139,7 @@ const server = http.createServer(async (req, res) => {
 
         // If no image was sent, use the actual default query asset
         if (!imageBuffer || imageBuffer.length === 0) {
-          const defaultAsset = path.resolve(process.cwd(), '..', 'assets', 'query_face.jpg');
+          const defaultAsset = path.join(ROOT_DIR, 'assets', 'query_face.jpg');
           if (fs.existsSync(defaultAsset)) {
             imageBuffer = fs.readFileSync(defaultAsset);
             originalName = 'query_face.jpg';
@@ -170,7 +171,7 @@ const server = http.createServer(async (req, res) => {
   // Static Candidate & Asset Serving Endpoint
   if (req.method === 'GET' && (url.pathname.startsWith('/candidates/') || url.pathname.startsWith('/assets/'))) {
     const cleanPath = url.pathname.replace(/^\/(api\/)?/, '');
-    const assetPath = path.resolve(process.cwd(), '..', cleanPath.startsWith('candidates/') ? `assets/${cleanPath}` : cleanPath);
+    const assetPath = path.join(ROOT_DIR, cleanPath.startsWith('candidates/') ? `assets/${cleanPath}` : cleanPath);
     if (fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
       const ext = path.extname(assetPath).toLowerCase();
       const mimeTypes: Record<string, string> = {
@@ -189,7 +190,7 @@ const server = http.createServer(async (req, res) => {
   // Inspect Run Details Endpoint
   if (req.method === 'GET' && url.pathname.startsWith('/api/runs/')) {
     const targetRunId = url.pathname.replace('/api/runs/', '').trim();
-    const targetDir = path.resolve(process.cwd(), '..', 'runs', targetRunId);
+    const targetDir = path.join(ROOT_DIR, 'runs', targetRunId);
     if (fs.existsSync(targetDir)) {
       const auditFile = path.join(targetDir, 'audit.jsonl');
       const evidenceFile = path.join(targetDir, 'evidence', 'evidence.json');

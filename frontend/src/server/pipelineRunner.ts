@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { analyzeImageWithWorker, cosineSimilarity, FaceWorkerResult } from './workerBridge';
+import { analyzeImageWithWorker, cosineSimilarity, FaceWorkerResult, getWorkspaceRoot } from './workerBridge';
 
 export interface PipelineCandidate {
   id: string;
@@ -134,7 +134,7 @@ async function fetchSepoliaBlockNumber(): Promise<number> {
 }
 
 export async function executeRealPipeline(inputBuffer: Buffer, originalFilename: string): Promise<PipelineRunResult> {
-  const rootDir = path.resolve(process.cwd(), '..');
+  const rootDir = getWorkspaceRoot();
   const runId = `run_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
   const runDir = path.join(rootDir, 'runs', runId);
 
@@ -203,7 +203,7 @@ export async function executeRealPipeline(inputBuffer: Buffer, originalFilename:
         landmarks: [],
         embedding_preview: [],
         quality: 0.0,
-        blur_variance: 0.0,
+        blur_variance: faceResult.blur_variance,
         status: 'fail',
         reasons: ['Zero faces detected in input image'],
       },

@@ -31,13 +31,29 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   return denom > 1e-9 ? Math.max(-1, Math.min(1, dot / denom)) : 0;
 }
 
+export function getWorkspaceRoot(): string {
+  if (process.env.TEKMERION_ROOT && fs.existsSync(process.env.TEKMERION_ROOT)) {
+    return process.env.TEKMERION_ROOT;
+  }
+  if (fs.existsSync(path.join(process.cwd(), 'workers', 'face', 'worker.py'))) {
+    return process.cwd();
+  }
+  if (fs.existsSync(path.join(process.cwd(), '..', 'workers', 'face', 'worker.py'))) {
+    return path.resolve(process.cwd(), '..');
+  }
+  if (fs.existsSync('/app/workers/face/worker.py')) {
+    return '/app';
+  }
+  return path.resolve(process.cwd(), '..');
+}
+
 function findPython(): string {
-  const root = path.resolve(process.cwd(), '..');
+  const root = getWorkspaceRoot();
   const venvPython = path.join(root, 'workers', 'face', '.venv', 'Scripts', 'python.exe');
   if (fs.existsSync(venvPython)) {
     return venvPython;
   }
-  const localVenv = path.join(process.cwd(), '..', 'workers', 'face', '.venv', 'bin', 'python');
+  const localVenv = path.join(root, 'workers', 'face', '.venv', 'bin', 'python');
   if (fs.existsSync(localVenv)) {
     return localVenv;
   }
@@ -46,7 +62,7 @@ function findPython(): string {
 
 export async function analyzeImageWithWorker(imagePath: string): Promise<FaceWorkerResult> {
   return new Promise((resolve) => {
-    const root = path.resolve(process.cwd(), '..');
+    const root = getWorkspaceRoot();
     const workerScript = path.join(root, 'workers', 'face', 'worker.py');
     const pythonBin = findPython();
 
@@ -143,6 +159,26 @@ function getImageDimensionsFromPath(filePath: string): { width: number; height: 
 
       try {
         const parsed = JSON.parse(jsonLine.trim());
+
+        if (!parsed.success || (parsed.errors && parsed.errors.length > 0)) {
+          console.warn('[FaceWorker] Worker returned error:', parsed.errors);
+          const realBlur = typeof parsed.blur_variance === 'number' ? parsed.blur_variance : 0.0;
+          resolve({
+            success: false,
+            face_count: 0,
+            bbox: [0, 0, 0, 0],
+            landmarks: [],
+            embedding: [],
+            full_embedding: [],
+            quality: 0.0,
+            blur_variance: realBlur,
+            status: 'fail',
+            reasons: parsed.errors && parsed.errors.length > 0 ? parsed.errors : ['Face analysis worker failure'],
+            raw_faces: [],
+          });
+          return;
+        }
+
         const faces = parsed.faces || [];
         const count = faces.length;
         const dims = getImageDimensionsFromPath(imagePath);
@@ -211,6 +247,7 @@ function getImageDimensionsFromPath(filePath: string): { width: number; height: 
             raw_faces: faces,
           });
         } else {
+          const realBlur = typeof parsed.blur_variance === 'number' ? parsed.blur_variance : 0.0;
           resolve({
             success: false,
             face_count: 0,
@@ -219,9 +256,9 @@ function getImageDimensionsFromPath(filePath: string): { width: number; height: 
             embedding: [],
             full_embedding: [],
             quality: 0.0,
-            blur_variance: 0.0,
+            blur_variance: realBlur,
             status: 'fail',
-            reasons: ['NO_FACE detected in image', 'Forensic pipeline requires a valid subject face'],
+            reasons: ['Zero faces detected in input image', 'Forensic pipeline requires a valid subject face'],
             raw_faces: [],
           });
         }
